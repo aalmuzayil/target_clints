@@ -22,6 +22,11 @@ import {
   adminTemplates,
   adminCreateTemplate,
   adminDeleteTemplate,
+  adminAccess,
+  adminAddAccess,
+  adminApproveAccess,
+  adminRejectAccess,
+  adminRemoveAccess,
 } from './api.js'
 import { STATUS, StatusBadge } from './shared.jsx'
 
@@ -81,12 +86,14 @@ function Dashboard({ onLogout }) {
           <button className={tab === 'companies' ? 'active' : ''} onClick={() => setTab('companies')}>الشركات</button>
           <button className={tab === 'reservations' ? 'active' : ''} onClick={() => setTab('reservations')}>طلبات الحجز</button>
           <button className={tab === 'pending' ? 'active' : ''} onClick={() => setTab('pending')}>شركات بانتظار الموافقة</button>
+          <button className={tab === 'access' ? 'active' : ''} onClick={() => setTab('access')}>المستخدمون</button>
           <button className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>رسائل واتساب</button>
         </div>
         {error && <div className="form-error">{error}</div>}
         {tab === 'companies' && <Companies onError={setError} />}
         {tab === 'reservations' && <Reservations onError={setError} />}
         {tab === 'pending' && <Pending onError={setError} />}
+        {tab === 'access' && <Access onError={setError} />}
         {tab === 'templates' && <Templates onError={setError} />}
       </main>
     </div>
@@ -302,6 +309,81 @@ function Pending({ onError }) {
               <div className="row-actions">
                 <button className="btn primary" onClick={() => approve(c)}>موافقة + تحقق واتساب</button>
                 <button className="btn danger" onClick={() => remove(c)}>رفض</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
+function Access({ onError }) {
+  const [pending, setPending] = useState([])
+  const [approved, setApproved] = useState([])
+  const [phone, setPhone] = useState('')
+
+  function load() {
+    adminAccess('pending').then(setPending).catch((e) => onError(e.message))
+    adminAccess('approved').then(setApproved).catch((e) => onError(e.message))
+  }
+  useEffect(load, [])
+
+  async function add(e) {
+    e.preventDefault()
+    const p = phone.replace(/\D/g, '')
+    if (!p) return
+    try { await adminAddAccess(p); setPhone(''); load() } catch (err) { onError(err.message) }
+  }
+  async function approve(p) {
+    try { const r = await adminApproveAccess(p); if (r.notifyWhatsappLink) window.open(r.notifyWhatsappLink, '_blank'); load() }
+    catch (e) { onError(e.message) }
+  }
+  async function reject(p) { try { await adminRejectAccess(p); load() } catch (e) { onError(e.message) } }
+  async function remove(p) {
+    if (!confirm(`إلغاء وصول الرقم ${p}؟`)) return
+    try { await adminRemoveAccess(p); load() } catch (e) { onError(e.message) }
+  }
+
+  return (
+    <>
+      <div className="admin-head"><h2>طلبات الوصول ({pending.length})</h2></div>
+      {pending.length === 0 ? (
+        <div className="empty">لا توجد طلبات وصول جديدة.</div>
+      ) : (
+        <div className="rows">
+          {pending.map((u) => (
+            <div className="row" key={u.phone}>
+              <div className="row-main">
+                <strong dir="ltr">{u.phone}</strong>
+                <div className="row-sub"><span>طلب دخول · {new Date(u.created_at).toLocaleDateString('ar')}</span></div>
+              </div>
+              <div className="row-actions">
+                <button className="btn primary" onClick={() => approve(u.phone)}>قبول + إشعار</button>
+                <button className="btn danger" onClick={() => reject(u.phone)}>رفض</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="admin-head" style={{ marginTop: 24 }}><h2>الأرقام المصرّح لها ({approved.length})</h2></div>
+      <form className="rows" style={{ padding: 14, marginBottom: 16 }} onSubmit={add}>
+        <div className="field-row">
+          <input dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05XXXXXXXX"
+            style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 11, fontFamily: 'inherit' }} />
+          <button className="btn primary">إضافة رقم</button>
+        </div>
+      </form>
+      {approved.length === 0 ? (
+        <div className="empty">لم تتم إضافة أرقام بعد. أضِف أرقام المستخدمين المصرّح لهم.</div>
+      ) : (
+        <div className="rows">
+          {approved.map((u) => (
+            <div className="row" key={u.phone}>
+              <div className="row-main"><strong dir="ltr">{u.phone}</strong></div>
+              <div className="row-actions">
+                <button className="btn danger" onClick={() => remove(u.phone)}>إلغاء الوصول</button>
               </div>
             </div>
           ))}

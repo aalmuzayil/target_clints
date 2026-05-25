@@ -75,6 +75,18 @@ export const adminApproveReservation = (id) =>
 export const adminRejectReservation = (id) =>
   req(`/api/admin/reservations/${id}/reject`, { method: 'POST', headers: adminH() })
 
+// ---- admin: access control (allowlist) ----
+export const adminAccess = (status) =>
+  req(`/api/admin/access${status ? `?status=${status}` : ''}`, { headers: adminH() })
+export const adminAddAccess = (phone) =>
+  req('/api/admin/access', { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ phone }) })
+export const adminApproveAccess = (phone) =>
+  req(`/api/admin/access/${phone}/approve`, { method: 'POST', headers: adminH() })
+export const adminRejectAccess = (phone) =>
+  req(`/api/admin/access/${phone}/reject`, { method: 'POST', headers: adminH() })
+export const adminRemoveAccess = (phone) =>
+  req(`/api/admin/access/${phone}`, { method: 'DELETE', headers: adminH() })
+
 // ---- admin: templates ----
 export const adminTemplates = () => req('/api/admin/templates', { headers: adminH() })
 export const adminCreateTemplate = (title, body) =>

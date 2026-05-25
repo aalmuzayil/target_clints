@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { requestOtp, verifyOtp, setPhoneSession } from './api.js'
 
 export default function PhoneLogin({ onClose, onSuccess }) {
-  const [step, setStep] = useState('phone') // phone | code
+  const [step, setStep] = useState('phone') // phone | code | pending
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
   const [devCode, setDevCode] = useState('')
@@ -15,6 +15,11 @@ export default function PhoneLogin({ onClose, onSuccess }) {
     setBusy(true)
     try {
       const r = await requestOtp(phone)
+      if (r.pending) {
+        // number not on the allowlist: request sent to admin
+        setStep('pending')
+        return
+      }
       if (r.skipVerify && r.token) {
         // no-verification mode: phone is just an identifier, log in immediately
         setPhoneSession(r.token, r.phone)
@@ -74,6 +79,18 @@ export default function PhoneLogin({ onClose, onSuccess }) {
               {busy ? '...' : 'متابعة'}
             </button>
           </form>
+        ) : step === 'pending' ? (
+          <div className="reserved-block">
+            <h3>تم إرسال طلبك</h3>
+            <div className="reserved-ok">✓ وصل رقمك إلى الإدارة</div>
+            <p className="muted">
+              رقمك <span dir="ltr">{phone}</span> غير مُفعّل بعد. سيتم تفعيله بعد موافقة الإدارة،
+              وبعدها يمكنك تسجيل الدخول والاطلاع على قائمتك.
+            </p>
+            <button type="button" className="btn primary full" onClick={onClose}>
+              حسناً
+            </button>
+          </div>
         ) : (
           <form onSubmit={verify}>
             <h3>رمز التحقق</h3>

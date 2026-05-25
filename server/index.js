@@ -85,11 +85,26 @@ function sign(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' })
 }
 
-function ensurePhoneUser(phone) {
-  const existing = db.prepare('SELECT 1 FROM phone_users WHERE phone = ?').get(phone)
-  if (!existing) {
-    db.prepare('INSERT INTO phone_users (phone, name, created_at) VALUES (?, ?, ?)').run(phone, '', now())
-  }
+// access control: 'allowlist' = only admin-approved numbers can sign in; others
+// become pending requests. 'open' = anyone can sign in.
+const ACCESS_MODE = process.env.ACCESS_MODE || 'allowlist'
+
+function accessStatus(phone) {
+  const u = db.prepare('SELECT status FROM phone_users WHERE phone = ?').get(phone)
+  return u ? u.status : 'none'
+}
+function setPhoneUser(phone, status) {
+  const u = db.prepare('SELECT 1 FROM phone_users WHERE phone = ?').get(phone)
+  if (u) db.prepare('UPDATE phone_users SET status = ? WHERE phone = ?').run(status, phone)
+  else db.prepare('INSERT INTO phone_users (phone, name, created_at, status) VALUES (?, ?, ?, ?)').run(phone, '', now(), status)
+}
+// record an access request for an unknown number (does not downgrade existing users)
+function recordPending(phone) {
+  const u = db.prepare('SELECT 1 FROM phone_users WHERE phone = ?').get(phone)
+  if (!u) db.prepare("INSERT INTO phone_users (phone, name, created_at, status) VALUES (?, '', ?, 'pending')").run(phone, now())
+}
+function blockedByAllowlist(phone) {
+  return ACCESS_MODE === 'allowlist' && accessStatus(phone) !== 'approved'
 }
 
 function adminAuth(req, res, next) {
@@ -135,6 +150,12 @@ app.post('/api/auth/request-otp', async (req, res) => {
   const phone = onlyDigits(req.body?.phone)
   if (phone.length < 7) return res.status(400).json({ error: 'رقم جوال غير صحيح' })
 
+  // allowlist gate: unknown/not-approved numbers become a pending request (no access yet)
+  if (blockedByAllowlist(phone)) {
+    recordPending(phone)
+    return res.json({ pending: true })
+  }
+
   if (twilioEnabled) {
     try {
       await twilioClient.verify.v2
@@ -149,7 +170,7 @@ app.post('/api/auth/request-otp', async (req, res) => {
 
   if (OTP_MODE === 'none') {
     // no verification: phone is just an identifier -> log in immediately
-    ensurePhoneUser(phone)
+    setPhoneUser(phone, 'approved')
     return res.json({ ok: true, token: sign({ type: 'phone', phone }), phone, skipVerify: true })
   }
 
@@ -186,7 +207,11 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     db.prepare('DELETE FROM otps WHERE phone = ?').run(phone)
   }
 
-  ensurePhoneUser(phone)
+  if (blockedByAllowlist(phone)) {
+    recordPending(phone)
+    return res.status(403).json({ pending: true, error: 'رقمك بانتظار موافقة الإدارة' })
+  }
+  setPhoneUser(phone, 'approved')
   res.json({ token: sign({ type: 'phone', phone }), phone })
 })
 
@@ -422,6 +447,43 @@ app.post('/api/admin/reservations/:id/reject', adminAuth, (req, res) => {
   db.prepare("UPDATE agencies SET status='open', reserved_by='' WHERE id=? AND reserved_by=?").run(
     r.company_id, r.phone,
   )
+  res.json({ ok: true })
+})
+
+// ============================================================
+//  ADMIN: access control (allowlist + pending requests)
+// ============================================================
+app.get('/api/admin/access', adminAuth, (req, res) => {
+  const status = req.query.status
+  const rows = status
+    ? db.prepare('SELECT phone, status, created_at FROM phone_users WHERE status = ? ORDER BY created_at DESC').all(status)
+    : db.prepare('SELECT phone, status, created_at FROM phone_users ORDER BY created_at DESC').all()
+  res.json(rows)
+})
+
+// admin pre-adds an approved number
+app.post('/api/admin/access', adminAuth, (req, res) => {
+  const phone = onlyDigits(req.body?.phone)
+  if (phone.length < 7) return res.status(400).json({ error: 'رقم غير صحيح' })
+  setPhoneUser(phone, 'approved')
+  res.status(201).json({ ok: true })
+})
+
+// approve a pending request -> returns a WhatsApp link to notify the user
+app.post('/api/admin/access/:phone/approve', adminAuth, (req, res) => {
+  const phone = onlyDigits(req.params.phone)
+  setPhoneUser(phone, 'approved')
+  const msg = 'تم تفعيل رقمك في منصة أكثم. يمكنك الآن تسجيل الدخول والاطلاع على قائمتك.'
+  res.json({ ok: true, notifyWhatsappLink: waLink(phone, msg) })
+})
+
+app.post('/api/admin/access/:phone/reject', adminAuth, (req, res) => {
+  db.prepare('DELETE FROM phone_users WHERE phone = ?').run(onlyDigits(req.params.phone))
+  res.json({ ok: true })
+})
+
+app.delete('/api/admin/access/:phone', adminAuth, (req, res) => {
+  db.prepare('DELETE FROM phone_users WHERE phone = ?').run(onlyDigits(req.params.phone))
   res.json({ ok: true })
 })
 
