@@ -6,7 +6,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import twilio from 'twilio'
-import { db, seed } from './db.js'
+import { db, seed, DEFAULT_INTRO, DEFAULT_PROFILE } from './db.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
@@ -69,6 +69,24 @@ function publicCompany(row) {
   if (!row) return row
   const { contact_phone, submitted_by, ...rest } = row
   return rest
+}
+
+// ---- settings + layered profile resolution ----
+function getSetting(key, fallback = '') {
+  const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key)
+  return r ? r.value : fallback
+}
+function setSetting(key, value) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+}
+// profile file priority: company-specific > category > global default
+function resolveProfile(company) {
+  if (company?.profile_file) return company.profile_file
+  if (company?.category) {
+    const c = db.prepare('SELECT profile_file FROM category_profiles WHERE category = ?').get(company.category)
+    if (c?.profile_file) return c.profile_file
+  }
+  return getSetting('default_profile_file', DEFAULT_PROFILE)
 }
 
 // convert a locally-entered number (e.g. 0501234567) to E.164 (+9665XXXXXXXX) for Twilio
@@ -249,6 +267,10 @@ app.get('/api/companies/categories', (_req, res) => {
   res.json(rows.map((r) => r.category))
 })
 
+app.get('/api/public-settings', (_req, res) => {
+  res.json({ introMessage: getSetting('intro_message', DEFAULT_INTRO) })
+})
+
 app.get('/api/companies/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM agencies WHERE id = ? AND approved = 1').get(req.params.id)
   if (!row) return res.status(404).json({ error: 'الشركة غير موجودة' })
@@ -280,7 +302,8 @@ app.post('/api/companies/:id/reserve', phoneAuth, (req, res) => {
     reservationId: info.lastInsertRowid,
     company: publicCompany({ ...c, status: 'reserved' }),
     contact_phone: c.contact_phone,
-    profile_file: c.profile_file,
+    profile_file: resolveProfile(c),
+    introMessage: getSetting('intro_message', DEFAULT_INTRO),
     premadeMessage: premade,
     whatsappLink: c.contact_phone ? waLink(c.contact_phone, premade) : '',
     deadline,
@@ -504,6 +527,47 @@ app.post('/api/admin/access/:phone/reject', adminAuth, (req, res) => {
 
 app.delete('/api/admin/access/:phone', adminAuth, (req, res) => {
   db.prepare('DELETE FROM phone_users WHERE phone = ?').run(onlyDigits(req.params.phone))
+  res.json({ ok: true })
+})
+
+// ============================================================
+//  ADMIN: settings (editable intro) + layered profile files
+// ============================================================
+app.get('/api/admin/settings', adminAuth, (_req, res) => {
+  res.json({
+    intro_message: getSetting('intro_message', DEFAULT_INTRO),
+    default_profile_file: getSetting('default_profile_file', DEFAULT_PROFILE),
+  })
+})
+
+app.post('/api/admin/settings', adminAuth, (req, res) => {
+  if (typeof req.body?.intro_message === 'string') setSetting('intro_message', req.body.intro_message)
+  res.json({ ok: true, intro_message: getSetting('intro_message', DEFAULT_INTRO) })
+})
+
+// upload/replace the GLOBAL default profile -> applies to all companies without an override
+app.post('/api/admin/default-profile', adminAuth, upload.single('profileFile'), (req, res) => {
+  if (req.file) setSetting('default_profile_file', fileUrl(req.file))
+  else if (req.body?.default_profile_file) setSetting('default_profile_file', req.body.default_profile_file)
+  res.json({ ok: true, default_profile_file: getSetting('default_profile_file', DEFAULT_PROFILE) })
+})
+
+app.get('/api/admin/category-profiles', adminAuth, (_req, res) => {
+  res.json(db.prepare('SELECT category, profile_file FROM category_profiles ORDER BY category').all())
+})
+
+app.post('/api/admin/category-profiles', adminAuth, upload.single('profileFile'), (req, res) => {
+  const category = String(req.body?.category || '').trim()
+  if (!category) return res.status(400).json({ error: 'القطاع مطلوب' })
+  const pf = req.file ? fileUrl(req.file) : req.body?.profile_file || ''
+  db.prepare(
+    'INSERT INTO category_profiles (category, profile_file) VALUES (?, ?) ON CONFLICT(category) DO UPDATE SET profile_file = excluded.profile_file',
+  ).run(category, pf)
+  res.json({ ok: true })
+})
+
+app.delete('/api/admin/category-profiles/:category', adminAuth, (req, res) => {
+  db.prepare('DELETE FROM category_profiles WHERE category = ?').run(req.params.category)
   res.json({ ok: true })
 })
 

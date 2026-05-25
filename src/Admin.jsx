@@ -27,6 +27,12 @@ import {
   adminApproveAccess,
   adminRejectAccess,
   adminRemoveAccess,
+  adminGetSettings,
+  adminSaveIntro,
+  adminUploadDefaultProfile,
+  adminCategoryProfiles,
+  adminSetCategoryProfile,
+  adminDeleteCategoryProfile,
 } from './api.js'
 import { STATUS, StatusBadge } from './shared.jsx'
 
@@ -88,6 +94,7 @@ function Dashboard({ onLogout }) {
           <button className={tab === 'pending' ? 'active' : ''} onClick={() => setTab('pending')}>شركات بانتظار الموافقة</button>
           <button className={tab === 'access' ? 'active' : ''} onClick={() => setTab('access')}>المستخدمون</button>
           <button className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>رسائل واتساب</button>
+          <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>الإعدادات</button>
         </div>
         {error && <div className="form-error">{error}</div>}
         {tab === 'companies' && <Companies onError={setError} />}
@@ -95,6 +102,7 @@ function Dashboard({ onLogout }) {
         {tab === 'pending' && <Pending onError={setError} />}
         {tab === 'access' && <Access onError={setError} />}
         {tab === 'templates' && <Templates onError={setError} />}
+        {tab === 'settings' && <Settings onError={setError} />}
       </main>
     </div>
   )
@@ -397,6 +405,80 @@ function Access({ onError }) {
                 <button className="btn ghost" onClick={() => rename(u)}>الاسم</button>
                 <button className="btn danger" onClick={() => remove(u.phone)}>إلغاء</button>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
+function Settings({ onError }) {
+  const [intro, setIntro] = useState('')
+  const [defaultProfile, setDefaultProfile] = useState('')
+  const [savedMsg, setSavedMsg] = useState('')
+  const [cats, setCats] = useState([])
+  const [catName, setCatName] = useState('')
+  const [catFile, setCatFile] = useState(null)
+
+  function load() {
+    adminGetSettings().then((s) => { setIntro(s.intro_message || ''); setDefaultProfile(s.default_profile_file || '') }).catch((e) => onError(e.message))
+    adminCategoryProfiles().then(setCats).catch((e) => onError(e.message))
+  }
+  useEffect(load, [])
+
+  async function saveIntro(e) {
+    e.preventDefault()
+    try { await adminSaveIntro(intro); setSavedMsg('تم الحفظ ✓'); setTimeout(() => setSavedMsg(''), 1800) } catch (err) { onError(err.message) }
+  }
+  async function uploadDefault(file) {
+    if (!file) return
+    try { const fd = new FormData(); fd.append('profileFile', file); const r = await adminUploadDefaultProfile(fd); setDefaultProfile(r.default_profile_file) } catch (e) { onError(e.message) }
+  }
+  async function addCat(e) {
+    e.preventDefault()
+    if (!catName.trim() || !catFile) { onError('أدخل اسم القطاع واختر ملفاً'); return }
+    try { const fd = new FormData(); fd.append('category', catName.trim()); fd.append('profileFile', catFile); await adminSetCategoryProfile(fd); setCatName(''); setCatFile(null); load() } catch (err) { onError(err.message) }
+  }
+  async function delCat(c) { try { await adminDeleteCategoryProfile(c); load() } catch (e) { onError(e.message) } }
+
+  const inputStyle = { border: '1px solid var(--line)', borderRadius: 10, padding: 11, fontFamily: 'inherit', width: '100%' }
+
+  return (
+    <>
+      <div className="admin-head"><h2>رسالة التعريف بأكثم</h2></div>
+      <form className="rows" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }} onSubmit={saveIntro}>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>هذه الرسالة تظهر للمستخدم بعد الحجز (قابلة للنسخ والإرسال). يُضاف رابط الملف التعريفي تلقائياً.</p>
+        <textarea value={intro} onChange={(e) => setIntro(e.target.value)} style={{ ...inputStyle, minHeight: 110, resize: 'vertical' }} />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button className="btn primary">حفظ الرسالة</button>
+          {savedMsg && <span style={{ color: 'var(--green-3)', fontSize: 14 }}>{savedMsg}</span>}
+        </div>
+      </form>
+
+      <div className="admin-head"><h2>الملف التعريفي الافتراضي</h2></div>
+      <div className="rows" style={{ padding: 16, marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>يُستخدم لكل الشركات التي ليس لها ملف خاص أو ملف قطاع. تغييره هنا يغيّره لكل تلك الشركات.</p>
+        {defaultProfile ? <a href={defaultProfile} target="_blank" rel="noreferrer" className="muted" style={{ fontSize: 13 }}>الملف الحالي ↗</a> : null}
+        <input type="file" accept=".pdf,application/pdf,image/*" onChange={(e) => uploadDefault(e.target.files[0])} />
+      </div>
+
+      <div className="admin-head"><h2>ملفات حسب القطاع ({cats.length})</h2></div>
+      <form className="rows" style={{ padding: 16, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }} onSubmit={addCat}>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>ملف لقطاع معيّن يُطبّق على كل شركات هذا القطاع (ما لم يكن للشركة ملف خاص).</p>
+        <input value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="اسم القطاع (مثال: تقنية)" style={inputStyle} />
+        <input type="file" accept=".pdf,application/pdf,image/*" onChange={(e) => setCatFile(e.target.files[0] || null)} />
+        <button className="btn primary">حفظ ملف القطاع</button>
+      </form>
+      {cats.length > 0 && (
+        <div className="rows">
+          {cats.map((c) => (
+            <div className="row" key={c.category}>
+              <div className="row-main">
+                <strong>{c.category}</strong>
+                <div className="row-sub"><a href={c.profile_file} target="_blank" rel="noreferrer">الملف ↗</a></div>
+              </div>
+              <div className="row-actions"><button className="btn danger" onClick={() => delCat(c.category)}>حذف</button></div>
             </div>
           ))}
         </div>

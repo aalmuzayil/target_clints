@@ -91,6 +91,18 @@ export const adminRejectAccess = (phone) =>
 export const adminRemoveAccess = (phone) =>
   req(`/api/admin/access/${phone}`, { method: 'DELETE', headers: adminH() })
 
+// ---- admin: settings + layered profiles ----
+export const adminGetSettings = () => req('/api/admin/settings', { headers: adminH() })
+export const adminSaveIntro = (intro_message) =>
+  req('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ intro_message }) })
+export const adminUploadDefaultProfile = (fd) =>
+  req('/api/admin/default-profile', { method: 'POST', headers: adminH(), body: fd })
+export const adminCategoryProfiles = () => req('/api/admin/category-profiles', { headers: adminH() })
+export const adminSetCategoryProfile = (fd) =>
+  req('/api/admin/category-profiles', { method: 'POST', headers: adminH(), body: fd })
+export const adminDeleteCategoryProfile = (cat) =>
+  req(`/api/admin/category-profiles/${encodeURIComponent(cat)}`, { method: 'DELETE', headers: adminH() })
+
 // ---- admin: templates ----
 export const adminTemplates = () => req('/api/admin/templates', { headers: adminH() })
 export const adminCreateTemplate = (title, body) =>

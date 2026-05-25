@@ -198,6 +198,12 @@ button { font-family: inherit; cursor: pointer; }
 .opt-card.wa .opt-icon { color: var(--wa); }
 .opt-card.disabled { opacity: 0.6; }
 .opt-card.success { background: var(--green-light); border-color: #b8e8c8; }
+.msg-box { border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.msg-head { display: flex; align-items: center; justify-content: space-between; }
+.msg-head strong { font-size: 15px; }
+.copy-btn { border: 1px solid var(--green); color: var(--green-3); background: #fff; border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 600; }
+.copy-btn:hover { background: var(--green-light); }
+.msg-text { margin: 0; white-space: pre-wrap; word-break: break-word; background: var(--bg); border-radius: 10px; padding: 12px; font-size: 13.5px; color: var(--ink-soft); line-height: 1.7; }
 .opt-card.form { flex-direction: column; align-items: stretch; gap: 12px; }
 .opt-form-head { display: flex; align-items: center; gap: 14px; }
 .opt-form-row { display: flex; gap: 8px; }

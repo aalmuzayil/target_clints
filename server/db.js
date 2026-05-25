@@ -59,7 +59,19 @@ db.exec(`
     body TEXT NOT NULL,
     created_at INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS category_profiles (
+    category TEXT PRIMARY KEY,
+    profile_file TEXT NOT NULL DEFAULT ''
+  );
 `)
+
+export const DEFAULT_INTRO =
+  'مرحباً، أتواصل معكم عبر منصة أكثم — منصة تحليلات القوى العاملة ودعم القرار بالذكاء الاصطناعي. يسعدني مشاركتكم الملف التعريفي للاطلاع.'
+export const DEFAULT_PROFILE = '/aktham-profile.pdf'
 
 // ---- idempotent column migrations on agencies (existing prod data is preserved) ----
 function ensureColumn(table, column, ddl) {
@@ -103,6 +115,14 @@ export function seed() {
     db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)').run(adminEmail, hash)
     console.log(`[seed] created admin user: ${adminEmail}`)
   }
+
+  const setIfMissing = (k, v) => {
+    if (!db.prepare('SELECT 1 FROM settings WHERE key = ?').get(k)) {
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(k, v)
+    }
+  }
+  setIfMissing('intro_message', DEFAULT_INTRO)
+  setIfMissing('default_profile_file', DEFAULT_PROFILE)
 
   if (db.prepare('SELECT COUNT(*) AS c FROM agencies').get().c === 0) {
     const insert = db.prepare(

@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { reserveCompany, submitLead, getPhoneToken } from './api.js'
 import { StatusBadge, Deadline } from './shared.jsx'
 
-const AKTHAM_BLURB =
+const FALLBACK_INTRO =
   'مرحباً، أتواصل معكم عبر منصة أكثم — منصة تحليلات القوى العاملة ودعم القرار بالذكاء الاصطناعي.'
-// Aktham's company profile (served from /public). Used unless a company has its own.
 const DEFAULT_PROFILE = '/aktham-profile.pdf'
 
 export default function CompanySheet({ company, onClose, onNeedLogin, onReserved }) {
@@ -75,14 +74,25 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
 }
 
 function ReservedOptions({ company, reservation }) {
-  // use the company's own profile file if the admin uploaded one, else Aktham's profile
+  const [copied, setCopied] = useState(false)
+  // profile file: company-specific > category > global default (resolved by the server)
   const profilePath = reservation.profile_file || DEFAULT_PROFILE
   const profileUrl = `${window.location.origin}${profilePath}`
 
-  // option 2: a forwardable WhatsApp message describing Aktham + the profile link
-  const shareText =
-    `${AKTHAM_BLURB}\n\nأرفق لكم الملف التعريفي للاطلاع:\n${profileUrl}`
+  // option 2: a forwardable message describing Aktham (admin-editable) + the profile link
+  const intro = reservation.introMessage || FALLBACK_INTRO
+  const shareText = `${intro}\n${profileUrl}`
   const shareLink = `https://wa.me/?text=${encodeURIComponent(shareText)}`
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(shareText)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      /* clipboard may be blocked; the text is visible to copy manually */
+    }
+  }
 
   return (
     <div className="reserved-block">
@@ -97,14 +107,19 @@ function ReservedOptions({ company, reservation }) {
         </div>
       </a>
 
-      {/* 2) forwardable Aktham + profile message */}
-      <a className="opt-card wa" href={shareLink} target="_blank" rel="noreferrer">
-        <OptIcon name="share" />
-        <div>
-          <strong>إرسال رسالة تعريف بأكثم</strong>
-          <span>رسالة جاهزة مع الملف التعريفي لإرسالها للشخص المعني</span>
+      {/* 2) copyable Aktham intro message + profile link */}
+      <div className="msg-box">
+        <div className="msg-head">
+          <strong>رسالة تعريف بأكثم</strong>
+          <button type="button" className="copy-btn" onClick={copy}>
+            {copied ? 'تم النسخ ✓' : 'نسخ'}
+          </button>
         </div>
-      </a>
+        <p className="msg-text">{shareText}</p>
+        <a className="btn whatsapp full" href={shareLink} target="_blank" rel="noreferrer">
+          <WaIcon /> إرسال عبر واتساب
+        </a>
+      </div>
 
       {/* 3) give us the concerned person's number */}
       <LeadForm companyId={company.id} />
