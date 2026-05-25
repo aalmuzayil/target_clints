@@ -98,14 +98,24 @@ ensureColumn('phone_users', 'status', "status TEXT NOT NULL DEFAULT 'approved'")
 ensureColumn('agencies', 'type', "type TEXT NOT NULL DEFAULT 'company'")
 
 // bump this when the seed dataset changes to force a one-time reload
-const DATA_VERSION = '2025-05-25-real-data-1'
+const DATA_VERSION = '2025-05-25-real-data-3'
+
+// logo map produced by scripts/match-logos.mjs (entity name -> /logos/auto/x)
+let LOGO_MAP = {}
+try {
+  LOGO_MAP = JSON.parse(fs.readFileSync(path.join(__dirname, 'logos-map.json'), 'utf8'))
+} catch {
+  LOGO_MAP = {}
+}
 
 function buildSeedRows() {
   const rows = []
   let order = 0
-  MINISTRIES.forEach((name) => rows.push({ name, type: 'ministry', category: '', logo: '', order: order++ }))
-  AUTHORITIES.forEach(([name, logo]) => rows.push({ name, type: 'authority', category: '', logo: logo || '', order: order++ }))
-  COMPANIES.forEach(([name, category]) => rows.push({ name, type: 'company', category, logo: '', order: order++ }))
+  const push = (name, type, category, url, desc) =>
+    rows.push({ name, type, category: category || '', url: url || '#', profile: desc || '', logo: LOGO_MAP[name] || '', order: order++ })
+  MINISTRIES.forEach((m) => push(m.name, 'ministry', '', m.url, m.desc))
+  AUTHORITIES.forEach((a) => push(a.name, 'authority', '', a.url, a.desc))
+  COMPANIES.forEach((c) => push(c.name, 'company', c.sector, c.url, c.desc))
   return rows
 }
 
@@ -135,8 +145,8 @@ export function seed() {
     const tx = db.transaction(() => {
       db.exec('DELETE FROM agencies')
       const insert = db.prepare(
-        `INSERT INTO agencies (name, short, logo, url, sort_order, category, type, status, approved)
-         VALUES (@name, '', @logo, '#', @order, @category, @type, 'open', 1)`,
+        `INSERT INTO agencies (name, short, logo, url, sort_order, category, type, profile, status, approved)
+         VALUES (@name, '', @logo, @url, @order, @category, @type, @profile, 'open', 1)`,
       )
       rows.forEach((r) => insert.run(r))
       db.prepare(

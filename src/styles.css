@@ -183,6 +183,7 @@ button { font-family: inherit; cursor: pointer; }
 .premade { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 14px; }
 .contact-row { margin: 10px 0; font-size: 15px; }
 .unavailable { text-align: center; color: var(--muted); padding: 14px; background: var(--bg); border-radius: 12px; }
+.site-link { display: inline-flex; align-items: center; gap: 6px; color: var(--green-3); font-size: 14px; font-weight: 600; margin: 4px 0 14px; }
 .reserved-block { display: flex; flex-direction: column; gap: 10px; }
 .reserved-ok { background: var(--green-light); color: var(--green-3); font-weight: 700; padding: 12px; border-radius: 12px; text-align: center; margin-bottom: 4px; }
 
