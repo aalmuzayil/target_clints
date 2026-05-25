@@ -3,6 +3,7 @@ import { requestOtp, verifyOtp, setPhoneSession } from './api.js'
 
 export default function PhoneLogin({ onClose, onSuccess }) {
   const [step, setStep] = useState('phone') // phone | code | pending
+  const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
   const [devCode, setDevCode] = useState('')
@@ -14,7 +15,7 @@ export default function PhoneLogin({ onClose, onSuccess }) {
     setError('')
     setBusy(true)
     try {
-      const r = await requestOtp(phone)
+      const r = await requestOtp(phone, name)
       if (r.pending) {
         // number not on the allowlist: request sent to admin
         setStep('pending')
@@ -22,7 +23,7 @@ export default function PhoneLogin({ onClose, onSuccess }) {
       }
       if (r.skipVerify && r.token) {
         // no-verification mode: phone is just an identifier, log in immediately
-        setPhoneSession(r.token, r.phone)
+        setPhoneSession(r.token, r.phone, r.name)
         onSuccess(r.phone)
         return
       }
@@ -43,8 +44,8 @@ export default function PhoneLogin({ onClose, onSuccess }) {
     setError('')
     setBusy(true)
     try {
-      const r = await verifyOtp(phone, code)
-      setPhoneSession(r.token, r.phone)
+      const r = await verifyOtp(phone, code, name)
+      setPhoneSession(r.token, r.phone, r.name)
       onSuccess(r.phone)
     } catch (err) {
       setError(err.message)
@@ -60,7 +61,17 @@ export default function PhoneLogin({ onClose, onSuccess }) {
         {step === 'phone' ? (
           <form onSubmit={send}>
             <h3>تسجيل الدخول</h3>
-            <p className="muted">أدخل رقم جوالك للمتابعة</p>
+            <p className="muted">أدخل اسمك ورقم جوالك للمتابعة</p>
+            <label>
+              الاسم
+              <input
+                type="text"
+                placeholder="اسمك"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+              />
+            </label>
             <label>
               رقم الجوال
               <input
@@ -70,7 +81,6 @@ export default function PhoneLogin({ onClose, onSuccess }) {
                 placeholder="05XXXXXXXX"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                autoFocus
                 required
               />
             </label>

@@ -93,15 +93,25 @@ function accessStatus(phone) {
   const u = db.prepare('SELECT status FROM phone_users WHERE phone = ?').get(phone)
   return u ? u.status : 'none'
 }
-function setPhoneUser(phone, status) {
-  const u = db.prepare('SELECT 1 FROM phone_users WHERE phone = ?').get(phone)
-  if (u) db.prepare('UPDATE phone_users SET status = ? WHERE phone = ?').run(status, phone)
-  else db.prepare('INSERT INTO phone_users (phone, name, created_at, status) VALUES (?, ?, ?, ?)').run(phone, '', now(), status)
+function getName(phone) {
+  const u = db.prepare('SELECT name FROM phone_users WHERE phone = ?').get(phone)
+  return u ? u.name : ''
+}
+// upsert a user's status; sets name only when a non-empty name is provided
+function setPhoneUser(phone, status, name) {
+  const u = db.prepare('SELECT name FROM phone_users WHERE phone = ?').get(phone)
+  if (u) {
+    if (name) db.prepare('UPDATE phone_users SET status = ?, name = ? WHERE phone = ?').run(status, name, phone)
+    else db.prepare('UPDATE phone_users SET status = ? WHERE phone = ?').run(status, phone)
+  } else {
+    db.prepare('INSERT INTO phone_users (phone, name, created_at, status) VALUES (?, ?, ?, ?)').run(phone, name || '', now(), status)
+  }
 }
 // record an access request for an unknown number (does not downgrade existing users)
-function recordPending(phone) {
-  const u = db.prepare('SELECT 1 FROM phone_users WHERE phone = ?').get(phone)
-  if (!u) db.prepare("INSERT INTO phone_users (phone, name, created_at, status) VALUES (?, '', ?, 'pending')").run(phone, now())
+function recordPending(phone, name) {
+  const u = db.prepare('SELECT name FROM phone_users WHERE phone = ?').get(phone)
+  if (!u) db.prepare("INSERT INTO phone_users (phone, name, created_at, status) VALUES (?, ?, ?, 'pending')").run(phone, name || '', now())
+  else if (name && !u.name) db.prepare('UPDATE phone_users SET name = ? WHERE phone = ?').run(name, phone)
 }
 function blockedByAllowlist(phone) {
   return ACCESS_MODE === 'allowlist' && accessStatus(phone) !== 'approved'
@@ -148,11 +158,12 @@ app.post('/api/login', (req, res) => {
 // ============================================================
 app.post('/api/auth/request-otp', async (req, res) => {
   const phone = onlyDigits(req.body?.phone)
+  const name = String(req.body?.name || '').trim()
   if (phone.length < 7) return res.status(400).json({ error: 'رقم جوال غير صحيح' })
 
   // allowlist gate: unknown/not-approved numbers become a pending request (no access yet)
   if (blockedByAllowlist(phone)) {
-    recordPending(phone)
+    recordPending(phone, name)
     return res.json({ pending: true })
   }
 
@@ -170,8 +181,8 @@ app.post('/api/auth/request-otp', async (req, res) => {
 
   if (OTP_MODE === 'none') {
     // no verification: phone is just an identifier -> log in immediately
-    setPhoneUser(phone, 'approved')
-    return res.json({ ok: true, token: sign({ type: 'phone', phone }), phone, skipVerify: true })
+    setPhoneUser(phone, 'approved', name)
+    return res.json({ ok: true, token: sign({ type: 'phone', phone }), phone, name: getName(phone), skipVerify: true })
   }
 
   // dev mode (code shown on screen)
@@ -186,6 +197,7 @@ app.post('/api/auth/request-otp', async (req, res) => {
 app.post('/api/auth/verify-otp', async (req, res) => {
   const phone = onlyDigits(req.body?.phone)
   const code = String(req.body?.code || '')
+  const name = String(req.body?.name || '').trim()
 
   if (twilioEnabled) {
     try {
@@ -208,11 +220,16 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   }
 
   if (blockedByAllowlist(phone)) {
-    recordPending(phone)
+    recordPending(phone, name)
     return res.status(403).json({ pending: true, error: 'رقمك بانتظار موافقة الإدارة' })
   }
-  setPhoneUser(phone, 'approved')
-  res.json({ token: sign({ type: 'phone', phone }), phone })
+  setPhoneUser(phone, 'approved', name)
+  res.json({ token: sign({ type: 'phone', phone }), phone, name: getName(phone) })
+})
+
+// current user's profile (name shown in the UI)
+app.get('/api/me', phoneAuth, (req, res) => {
+  res.json({ phone: req.phone, name: getName(req.phone) })
 })
 
 // ============================================================
@@ -421,8 +438,10 @@ app.get('/api/admin/companies/:id/assignments', adminAuth, (req, res) => {
 app.get('/api/admin/reservations', adminAuth, (req, res) => {
   const status = req.query.status
   const base =
-    `SELECT r.*, a.name AS company_name, a.logo AS company_logo FROM reservations r
-     JOIN agencies a ON a.id = r.company_id`
+    `SELECT r.*, a.name AS company_name, a.logo AS company_logo, pu.name AS requester_name
+     FROM reservations r
+     JOIN agencies a ON a.id = r.company_id
+     LEFT JOIN phone_users pu ON pu.phone = r.phone`
   const rows = status
     ? db.prepare(base + ' WHERE r.status = ? ORDER BY r.created_at DESC').all(status)
     : db.prepare(base + ' ORDER BY r.created_at DESC').all()
@@ -456,16 +475,17 @@ app.post('/api/admin/reservations/:id/reject', adminAuth, (req, res) => {
 app.get('/api/admin/access', adminAuth, (req, res) => {
   const status = req.query.status
   const rows = status
-    ? db.prepare('SELECT phone, status, created_at FROM phone_users WHERE status = ? ORDER BY created_at DESC').all(status)
-    : db.prepare('SELECT phone, status, created_at FROM phone_users ORDER BY created_at DESC').all()
+    ? db.prepare('SELECT phone, name, status, created_at FROM phone_users WHERE status = ? ORDER BY created_at DESC').all(status)
+    : db.prepare('SELECT phone, name, status, created_at FROM phone_users ORDER BY created_at DESC').all()
   res.json(rows)
 })
 
-// admin pre-adds an approved number
+// admin pre-adds (or renames) an approved number with a name
 app.post('/api/admin/access', adminAuth, (req, res) => {
   const phone = onlyDigits(req.body?.phone)
+  const name = String(req.body?.name || '').trim()
   if (phone.length < 7) return res.status(400).json({ error: 'رقم غير صحيح' })
-  setPhoneUser(phone, 'approved')
+  setPhoneUser(phone, 'approved', name)
   res.status(201).json({ ok: true })
 })
 

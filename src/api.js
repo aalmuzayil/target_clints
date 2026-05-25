@@ -1,6 +1,7 @@
 const ADMIN_KEY = 'aktham_admin_token'
 const PHONE_KEY = 'aktham_phone_token'
 const PHONE_NUM = 'aktham_phone_number'
+const PHONE_NAME = 'aktham_phone_name'
 
 export const getAdminToken = () => localStorage.getItem(ADMIN_KEY)
 export const setAdminToken = (t) => localStorage.setItem(ADMIN_KEY, t)
@@ -8,13 +9,16 @@ export const clearAdminToken = () => localStorage.removeItem(ADMIN_KEY)
 
 export const getPhoneToken = () => localStorage.getItem(PHONE_KEY)
 export const getPhoneNumber = () => localStorage.getItem(PHONE_NUM)
-export const setPhoneSession = (t, phone) => {
+export const getPhoneName = () => localStorage.getItem(PHONE_NAME) || ''
+export const setPhoneSession = (t, phone, name = '') => {
   localStorage.setItem(PHONE_KEY, t)
   localStorage.setItem(PHONE_NUM, phone)
+  localStorage.setItem(PHONE_NAME, name || '')
 }
 export const clearPhoneSession = () => {
   localStorage.removeItem(PHONE_KEY)
   localStorage.removeItem(PHONE_NUM)
+  localStorage.removeItem(PHONE_NAME)
 }
 
 async function handle(res) {
@@ -32,10 +36,10 @@ export const listCategories = () => req('/api/companies/categories')
 export const getCompany = (id) => req(`/api/companies/${id}`)
 
 // ---- phone auth ----
-export const requestOtp = (phone) =>
-  req('/api/auth/request-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) })
-export const verifyOtp = (phone, code) =>
-  req('/api/auth/verify-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, code }) })
+export const requestOtp = (phone, name = '') =>
+  req('/api/auth/request-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, name }) })
+export const verifyOtp = (phone, code, name = '') =>
+  req('/api/auth/verify-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, code, name }) })
 
 // ---- user actions ----
 export const reserveCompany = (id, message = '') =>
@@ -78,8 +82,8 @@ export const adminRejectReservation = (id) =>
 // ---- admin: access control (allowlist) ----
 export const adminAccess = (status) =>
   req(`/api/admin/access${status ? `?status=${status}` : ''}`, { headers: adminH() })
-export const adminAddAccess = (phone) =>
-  req('/api/admin/access', { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ phone }) })
+export const adminAddAccess = (phone, name = '') =>
+  req('/api/admin/access', { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ phone, name }) })
 export const adminApproveAccess = (phone) =>
   req(`/api/admin/access/${phone}/approve`, { method: 'POST', headers: adminH() })
 export const adminRejectAccess = (phone) =>

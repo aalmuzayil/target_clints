@@ -261,7 +261,7 @@ function Reservations({ onError }) {
               <div className="row-main">
                 <strong>{r.company_name}</strong>
                 <div className="row-sub">
-                  <span>الطالب:</span><span dir="ltr">{r.phone}</span>
+                  <span>الطالب: {r.requester_name || '—'}</span><span dir="ltr">{r.phone}</span>
                   <span>· {new Date(r.created_at).toLocaleDateString('ar')}</span>
                 </div>
                 {r.lead_phone ? (
@@ -322,6 +322,7 @@ function Access({ onError }) {
   const [pending, setPending] = useState([])
   const [approved, setApproved] = useState([])
   const [phone, setPhone] = useState('')
+  const [name, setName] = useState('')
 
   function load() {
     adminAccess('pending').then(setPending).catch((e) => onError(e.message))
@@ -333,7 +334,12 @@ function Access({ onError }) {
     e.preventDefault()
     const p = phone.replace(/\D/g, '')
     if (!p) return
-    try { await adminAddAccess(p); setPhone(''); load() } catch (err) { onError(err.message) }
+    try { await adminAddAccess(p, name); setPhone(''); setName(''); load() } catch (err) { onError(err.message) }
+  }
+  async function rename(u) {
+    const newName = prompt('اسم صاحب الرقم:', u.name || '')
+    if (newName == null) return
+    try { await adminAddAccess(u.phone, newName.trim()); load() } catch (e) { onError(e.message) }
   }
   async function approve(p) {
     try { const r = await adminApproveAccess(p); if (r.notifyWhatsappLink) window.open(r.notifyWhatsappLink, '_blank'); load() }
@@ -355,8 +361,8 @@ function Access({ onError }) {
           {pending.map((u) => (
             <div className="row" key={u.phone}>
               <div className="row-main">
-                <strong dir="ltr">{u.phone}</strong>
-                <div className="row-sub"><span>طلب دخول · {new Date(u.created_at).toLocaleDateString('ar')}</span></div>
+                <strong>{u.name || '—'}</strong>
+                <div className="row-sub"><span dir="ltr">{u.phone}</span><span>· طلب دخول</span></div>
               </div>
               <div className="row-actions">
                 <button className="btn primary" onClick={() => approve(u.phone)}>قبول + إشعار</button>
@@ -368,11 +374,13 @@ function Access({ onError }) {
       )}
 
       <div className="admin-head" style={{ marginTop: 24 }}><h2>الأرقام المصرّح لها ({approved.length})</h2></div>
-      <form className="rows" style={{ padding: 14, marginBottom: 16 }} onSubmit={add}>
+      <form className="rows" style={{ padding: 14, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }} onSubmit={add}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="الاسم"
+          style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 11, fontFamily: 'inherit' }} />
         <div className="field-row">
           <input dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05XXXXXXXX"
             style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 11, fontFamily: 'inherit' }} />
-          <button className="btn primary">إضافة رقم</button>
+          <button className="btn primary">إضافة</button>
         </div>
       </form>
       {approved.length === 0 ? (
@@ -381,9 +389,13 @@ function Access({ onError }) {
         <div className="rows">
           {approved.map((u) => (
             <div className="row" key={u.phone}>
-              <div className="row-main"><strong dir="ltr">{u.phone}</strong></div>
+              <div className="row-main">
+                <strong>{u.name || '—'}</strong>
+                <div className="row-sub"><span dir="ltr">{u.phone}</span></div>
+              </div>
               <div className="row-actions">
-                <button className="btn danger" onClick={() => remove(u.phone)}>إلغاء الوصول</button>
+                <button className="btn ghost" onClick={() => rename(u)}>الاسم</button>
+                <button className="btn danger" onClick={() => remove(u.phone)}>إلغاء</button>
               </div>
             </div>
           ))}

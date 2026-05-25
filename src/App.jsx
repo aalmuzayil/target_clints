@@ -6,6 +6,7 @@ import {
   myCompanies,
   submitCompany,
   getPhoneNumber,
+  getPhoneName,
   getPhoneToken,
   clearPhoneSession,
 } from './api.js'
@@ -21,6 +22,7 @@ export default function App() {
   const [cat, setCat] = useState('')
   const [view, setView] = useState('all') // all | mine
   const [phone, setPhone] = useState(getPhoneNumber())
+  const [name, setName] = useState(getPhoneName())
   const [showLogin, setShowLogin] = useState(false)
   const [selected, setSelected] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -57,18 +59,20 @@ export default function App() {
 
   function onLogin(p) {
     setPhone(p)
+    setName(getPhoneName())
     setShowLogin(false)
     loadMine()
   }
   function logout() {
     clearPhoneSession()
     setPhone(null)
+    setName('')
     setView('all')
   }
 
   return (
     <div className="app">
-      <Header phone={phone} onLogin={() => setShowLogin(true)} onLogout={logout} />
+      <Header phone={phone} name={name} onLogin={() => setShowLogin(true)} onLogout={logout} />
 
       <section className="hero">
         <div className="container">
@@ -176,7 +180,7 @@ export default function App() {
   )
 }
 
-function Header({ phone, onLogin, onLogout }) {
+function Header({ phone, name, onLogin, onLogout }) {
   return (
     <header className="site-header">
       <div className="container header-inner">
@@ -185,7 +189,7 @@ function Header({ phone, onLogin, onLogout }) {
         </a>
         {phone ? (
           <div className="account">
-            <span className="acc-phone" dir="ltr">{phone}</span>
+            <span className="acc-phone" dir={name ? 'rtl' : 'ltr'}>{name || phone}</span>
             <button className="btn ghost small" onClick={onLogout}>خروج</button>
           </div>
         ) : (
