@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { MINISTRIES, AUTHORITIES, COMPANIES, COMPLETED } from './seed-data.js'
+import { MINISTRIES, AUTHORITIES, COMPANIES, COMPLETED, RECENT } from './seed-data.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -169,6 +169,10 @@ export function seed() {
     `INSERT INTO agencies (name, short, logo, url, sort_order, category, type, profile, status, approved)
      VALUES (?, '', ?, ?, ?, ?, 'company', ?, 'completed', 1)`,
   )
+  const insertOpen = db.prepare(
+    `INSERT INTO agencies (name, short, logo, url, sort_order, category, type, profile, status, approved)
+     VALUES (?, '', ?, ?, ?, ?, 'company', ?, 'open', 1)`,
+  )
   let maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM agencies').get().m
   let added = 0
   for (const c of COMPLETED) {
@@ -177,5 +181,11 @@ export function seed() {
       added++
     }
   }
-  if (added) console.log(`[seed] added ${added} completed companies`)
+  for (const c of RECENT) {
+    if (!exists.get(c.name)) {
+      insertOpen.run(c.name, c.logo || '', c.url || '#', ++maxOrder, c.sector || '', c.desc || '')
+      added++
+    }
+  }
+  if (added) console.log(`[seed] added ${added} companies (completed + recent)`)
 }

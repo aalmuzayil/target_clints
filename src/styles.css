@@ -27,7 +27,7 @@ body {
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; }
 
-.container { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+.container { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 22px; }
 
 /* ---------- header ---------- */
 .site-header {
@@ -107,11 +107,11 @@ button { font-family: inherit; cursor: pointer; }
 .stat .stat-label { font-size: 13px; color: var(--muted); }
 .stat.open .stat-num { color: var(--green-3); }
 .stat.reserved .stat-num { color: #b8860b; }
-.stat.completed .stat-num { color: #555; }
+.stat.completed .stat-num { color: #1d6fc7; }
 .stat.active { border-width: 2px; }
 .stat.open.active { border-color: var(--green-3); background: var(--green-light); }
 .stat.reserved.active { border-color: #b8860b; background: #fff7e6; }
-.stat.completed.active { border-color: #555; background: #f1f1f1; }
+.stat.completed.active { border-color: #1d6fc7; background: #e8f1fb; }
 .chips-sub { margin-top: 8px; }
 .chips-sub .chip.active { background: var(--green-3); border-color: var(--green-3); }
 
@@ -132,7 +132,7 @@ button { font-family: inherit; cursor: pointer; }
 .card:hover { box-shadow: var(--shadow); border-color: var(--green); }
 .card-logo {
   width: 100%; height: 110px; display: grid; place-items: center;
-  background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; overflow: hidden;
 }
 .card-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .card-logo span { color: var(--green-3); font-weight: 700; font-size: 18px; }
@@ -144,7 +144,7 @@ button { font-family: inherit; cursor: pointer; }
 .badge-open { background: var(--green-light); color: var(--green-3); }
 .badge-reserved { background: #fff3d6; color: #b07d12; }
 .badge-claimed { background: #e2e8ff; color: #3a52c4; }
-.badge-completed { background: #eceef0; color: #5b5c66; }
+.badge-completed { background: #e8f1fb; color: #1d6fc7; }
 
 .chip-sm { font-size: 11px; padding: 4px 10px; border-radius: 999px; background: #eef1ef; color: var(--ink-soft); }
 
@@ -184,7 +184,7 @@ button { font-family: inherit; cursor: pointer; }
 .sheet-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 12px; }
 .sheet-logo {
   width: 84px; height: 84px; flex-shrink: 0; display: grid; place-items: center;
-  background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 8px;
+  background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 8px; overflow: hidden;
 }
 .sheet-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .sheet-logo span { color: var(--green-3); font-weight: 700; }
@@ -250,7 +250,7 @@ button { font-family: inherit; cursor: pointer; }
 .stackbar > div { display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 700; min-width: 24px; }
 .seg-open { background: var(--green-3); }
 .seg-reserved { background: #d4a017; }
-.seg-completed { background: #777; }
+.seg-completed { background: #1d6fc7; }
 .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 13px; color: var(--muted); }
 .legend .dot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-inline-end: 5px; vertical-align: middle; }
 .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }

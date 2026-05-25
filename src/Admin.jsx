@@ -137,7 +137,7 @@ function Overview({ onError }) {
         <Kpi num={s.totals.entities} label="إجمالي الجهات" />
         <Kpi num={st.open || 0} label="متوفر" color="var(--green-3)" />
         <Kpi num={st.reserved || 0} label="محجوز" color="#b8860b" />
-        <Kpi num={st.completed || 0} label="مكتمل" color="#555" />
+        <Kpi num={st.completed || 0} label="مكتمل" color="#1d6fc7" />
         <Kpi num={s.totals.users} label="مستخدمون مفعّلون" />
         <Kpi num={s.totals.pendingUsers} label="طلبات وصول" />
         <Kpi num={s.totals.reservations} label="طلبات الحجز" />

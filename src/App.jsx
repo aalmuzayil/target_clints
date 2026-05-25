@@ -119,17 +119,17 @@ export default function App() {
         {/* interactive status counters */}
         {view === 'all' && (
           <div className="stats">
-            <button className={statusF === 'open' ? 'stat open active' : 'stat open'} onClick={() => setStatusF(statusF === 'open' ? '' : 'open')}>
-              <span className="stat-num">{counts.open}</span>
-              <span className="stat-label">متوفر</span>
+            <button className={statusF === 'completed' ? 'stat completed active' : 'stat completed'} onClick={() => setStatusF(statusF === 'completed' ? '' : 'completed')}>
+              <span className="stat-num">{counts.completed}</span>
+              <span className="stat-label">مكتمل</span>
             </button>
             <button className={statusF === 'reserved' ? 'stat reserved active' : 'stat reserved'} onClick={() => setStatusF(statusF === 'reserved' ? '' : 'reserved')}>
               <span className="stat-num">{counts.reserved}</span>
               <span className="stat-label">محجوز</span>
             </button>
-            <button className={statusF === 'completed' ? 'stat completed active' : 'stat completed'} onClick={() => setStatusF(statusF === 'completed' ? '' : 'completed')}>
-              <span className="stat-num">{counts.completed}</span>
-              <span className="stat-label">مكتمل</span>
+            <button className={statusF === 'open' ? 'stat open active' : 'stat open'} onClick={() => setStatusF(statusF === 'open' ? '' : 'open')}>
+              <span className="stat-num">{counts.open}</span>
+              <span className="stat-label">متوفر</span>
             </button>
           </div>
         )}
