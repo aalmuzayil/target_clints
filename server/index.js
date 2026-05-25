@@ -707,8 +707,20 @@ app.use('/uploads', express.static(UPLOAD_DIR))
 
 if (process.env.NODE_ENV === 'production') {
   const dist = path.join(ROOT, 'dist')
-  app.use(express.static(dist))
-  app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')))
+  // hashed assets cache forever; index.html must always revalidate so clients
+  // pick up new asset references immediately after a deploy.
+  app.use(
+    express.static(dist, {
+      setHeaders: (res, p) => {
+        if (p.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache')
+        else if (/\/assets\//.test(p)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+      },
+    }),
+  )
+  app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache')
+    res.sendFile(path.join(dist, 'index.html'))
+  })
 }
 
 app.listen(PORT, () => console.log(`[server] listening on http://localhost:${PORT} (otp=${OTP_MODE})`))
