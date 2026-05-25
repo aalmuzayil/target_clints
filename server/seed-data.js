@@ -92,3 +92,15 @@ export const COMPANIES = [
   { name: 'نادي الاتحاد', sector: 'الإعلام والرياضة', url: 'https://www.ittihad.com.sa', desc: 'نادٍ رياضي سعودي.' },
   { name: 'نادي الأهلي', sector: 'الإعلام والرياضة', url: 'https://www.alahli.com.sa', desc: 'نادٍ رياضي سعودي.' },
 ]
+
+// Companies added as 'completed' (مكتمل) with their logos from the local "completed" folder.
+// { name, sector, url, desc, logo }
+export const COMPLETED = [
+  { name: 'مؤسسة سليمان بن عبدالعزيز الراجحي الخيرية', sector: 'القطاع غير الربحي', url: 'https://srcf.org.sa', desc: 'مؤسسة وقفية خيرية تعنى بالتنمية الاجتماعية والإنسانية.', logo: '/logos/completed/al-rajhi-foundation.webp' },
+  { name: 'تكافل الراجحي', sector: 'الخدمات المالية', url: 'https://www.alrajhitakaful.com', desc: 'شركة تأمين تعاوني (تكافل) سعودية.', logo: '/logos/completed/al-rajhi-takaful.png' },
+  { name: 'صندوق التنمية السياحي', sector: 'الخدمات المالية', url: 'https://tdf.gov.sa', desc: 'تمويل ودعم مشاريع ومنشآت القطاع السياحي.', logo: '/logos/completed/tourism-dev-fund.jpg' },
+  { name: 'سنتر3 (center3)', sector: 'التقنية والاتصالات', url: 'https://center3.com', desc: 'شركة متخصصة في مراكز البيانات والربط الرقمي.', logo: '/logos/completed/center3.jpg' },
+  { name: 'الشركة السعودية لمراكز البيانات (SCCC) من stc', sector: 'التقنية والاتصالات', url: 'https://sccc.sa', desc: 'خدمات مراكز البيانات والاستضافة والحوسبة السحابية.', logo: '/logos/completed/sccc-stc.jpg' },
+  { name: 'إمداد من علم', sector: 'التقنية والاتصالات', url: 'https://elm.sa', desc: 'حلول إدارة المستودعات والإمداد التابعة لشركة علم.', logo: '/logos/completed/emdad-elm.png' },
+  { name: '½M', sector: '', url: '', desc: '', logo: '/logos/completed/half-m.png' },
+]
