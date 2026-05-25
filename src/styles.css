@@ -205,6 +205,9 @@ button { font-family: inherit; cursor: pointer; }
 .opt-form-row input:focus { outline: none; border-color: var(--green); }
 .opt-form-row .btn { white-space: nowrap; }
 
+.welcome-block { text-align: center; padding: 16px 4px 4px; }
+.welcome-block h3 { font-size: 24px; margin: 8px 0 4px; }
+.welcome-emoji { font-size: 48px; line-height: 1; }
 .dev-hint { background: #fff7e6; border: 1px dashed #f0c674; color: #8a6d1a; border-radius: 12px; padding: 10px; font-size: 13px; text-align: center; margin: 4px 0; }
 .form-error { background: #fdecea; color: #c0392b; border: 1px solid #f5c6c0; border-radius: 12px; padding: 10px 12px; font-size: 14px; margin: 6px 0; }
 .muted { color: var(--muted); }
