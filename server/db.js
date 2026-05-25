@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { MINISTRIES, AUTHORITIES, COMPANIES } from './seed-data.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -93,18 +94,20 @@ ensureColumn('agencies', 'profile_file', "profile_file TEXT NOT NULL DEFAULT ''"
 ensureColumn('reservations', 'lead_phone', "lead_phone TEXT NOT NULL DEFAULT ''")
 // access control: 'approved' can sign in; 'pending' is an awaiting-approval request
 ensureColumn('phone_users', 'status', "status TEXT NOT NULL DEFAULT 'approved'")
+// type: 'ministry' | 'authority' | 'company'
+ensureColumn('agencies', 'type', "type TEXT NOT NULL DEFAULT 'company'")
 
-const SEED_AGENCIES = [
-  { name: 'الهيئة السعودية للبيانات والذكاء الاصطناعي', short: 'سدايا', logo: '/logos/sdaia.jpg', url: 'https://sdaia.gov.sa', category: 'تقنية', status: 'open' },
-  { name: 'الهيئة السعودية للمدن الصناعية ومناطق التقنية', short: 'مدن', logo: '/logos/modon.png', url: 'https://modon.gov.sa', category: 'صناعة', status: 'open' },
-  { name: 'الهيئة السعودية للمراجعين الداخليين', short: 'هيئة المراجعين الداخليين', logo: '/logos/internal-auditors.png', url: '#', category: 'مالية', status: 'claimed' },
-  { name: 'الهيئة السعودية للمراجعين والمحاسبين', short: 'سوكبا', logo: '/logos/socpa.jpg', url: 'https://socpa.org.sa', category: 'مالية', status: 'open' },
-  { name: 'الهيئة السعودية للمياه', short: 'هيئة المياه', logo: '/logos/water.png', url: '#', category: 'بنية تحتية', status: 'completed' },
-  { name: 'الهيئة العامة للأمن الغذائي', short: 'الأمن الغذائي', logo: '/logos/food-security.png', url: 'https://gfsa.gov.sa', category: 'غذاء', status: 'open' },
-  { name: 'الهيئة العامة للعناية بشؤون المسجد الحرام والمسجد النبوي', short: 'العناية بالحرمين', logo: '/logos/two-holy-mosques.png', url: '#', category: 'خدمات', status: 'open' },
-  { name: 'الهيئة العامة للمساحة والمعلومات الجيومكانية', short: 'المساحة الجيومكانية', logo: '/logos/geospatial.jpg', url: 'https://gasgi.gov.sa', category: 'تقنية', status: 'reserved' },
-  { name: 'الهيئة العامة للولاية على أموال القاصرين ومن في حكمهم', short: 'أموال القاصرين', logo: '/logos/minors-funds.jpg', url: '#', category: 'مالية', status: 'open' },
-]
+// bump this when the seed dataset changes to force a one-time reload
+const DATA_VERSION = '2025-05-25-real-data-1'
+
+function buildSeedRows() {
+  const rows = []
+  let order = 0
+  MINISTRIES.forEach((name) => rows.push({ name, type: 'ministry', category: '', logo: '', order: order++ }))
+  AUTHORITIES.forEach(([name, logo]) => rows.push({ name, type: 'authority', category: '', logo: logo || '', order: order++ }))
+  COMPANIES.forEach(([name, category]) => rows.push({ name, type: 'company', category, logo: '', order: order++ }))
+  return rows
+}
 
 export function seed() {
   const adminEmail = (process.env.ADMIN_EMAIL || 'admin@example.com').toLowerCase()
@@ -124,12 +127,23 @@ export function seed() {
   setIfMissing('intro_message', DEFAULT_INTRO)
   setIfMissing('default_profile_file', DEFAULT_PROFILE)
 
-  if (db.prepare('SELECT COUNT(*) AS c FROM agencies').get().c === 0) {
-    const insert = db.prepare(
-      `INSERT INTO agencies (name, short, logo, url, sort_order, category, status, approved)
-       VALUES (@name, @short, @logo, @url, @order, @category, @status, 1)`,
-    )
-    SEED_AGENCIES.forEach((a, i) => insert.run({ ...a, order: i }))
-    console.log(`[seed] inserted ${SEED_AGENCIES.length} companies`)
+  // load the real dataset once per DATA_VERSION (replaces the catalog; runs on empty
+  // DB or when the dataset version changes). Admin edits persist after this point.
+  const currentVersion = db.prepare("SELECT value FROM settings WHERE key = 'data_version'").get()?.value
+  if (currentVersion !== DATA_VERSION) {
+    const rows = buildSeedRows()
+    const tx = db.transaction(() => {
+      db.exec('DELETE FROM agencies')
+      const insert = db.prepare(
+        `INSERT INTO agencies (name, short, logo, url, sort_order, category, type, status, approved)
+         VALUES (@name, '', @logo, '#', @order, @category, @type, 'open', 1)`,
+      )
+      rows.forEach((r) => insert.run(r))
+      db.prepare(
+        "INSERT INTO settings (key, value) VALUES ('data_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      ).run(DATA_VERSION)
+    })
+    tx()
+    console.log(`[seed] loaded ${rows.length} entries (version ${DATA_VERSION})`)
   }
 }

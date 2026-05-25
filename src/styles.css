@@ -101,6 +101,8 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 999px; padding: 8px 16px; font-size: 14px; color: var(--ink-soft); font-weight: 500;
 }
 .chip.active { background: var(--ink); border-color: var(--ink); color: #fff; }
+.chips-sub { margin-top: 8px; }
+.chips-sub .chip.active { background: var(--green-3); border-color: var(--green-3); }
 
 .list-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 12px; }
 .count { color: var(--muted); font-size: 14px; }

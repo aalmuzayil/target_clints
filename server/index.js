@@ -260,9 +260,10 @@ app.get('/api/companies', (req, res) => {
   res.json(rows.map(publicCompany))
 })
 
+// sectors (categories) of company-type entries — used for the company sub-filter
 app.get('/api/companies/categories', (_req, res) => {
   const rows = db
-    .prepare("SELECT DISTINCT category FROM agencies WHERE approved = 1 AND category <> '' ORDER BY category")
+    .prepare("SELECT DISTINCT category FROM agencies WHERE approved = 1 AND type = 'company' AND category <> '' ORDER BY category")
     .all()
   res.json(rows.map((r) => r.category))
 })
@@ -354,17 +355,17 @@ app.get('/api/me/companies', phoneAuth, (req, res) => {
 //  ADMIN: companies CRUD
 // ============================================================
 app.post('/api/agencies', adminAuth, companyUpload, (req, res) => {
-  const { name, short = '', url = '#', category = '', profile = '', contact_phone = '', status = 'open' } = req.body || {}
+  const { name, short = '', url = '#', category = '', profile = '', contact_phone = '', status = 'open', type = 'company' } = req.body || {}
   if (!name || !name.trim()) return res.status(400).json({ error: 'الاسم مطلوب' })
   const logo = fileUrl(req.files?.logoFile?.[0]) || req.body.logo || ''
   const profileFile = fileUrl(req.files?.profileFile?.[0]) || req.body.profile_file || ''
   const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM agencies').get().m
   const info = db
     .prepare(
-      `INSERT INTO agencies (name, short, logo, url, sort_order, category, profile, contact_phone, status, profile_file, approved)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      `INSERT INTO agencies (name, short, logo, url, sort_order, category, profile, contact_phone, status, profile_file, type, approved)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     )
-    .run(name.trim(), short, logo, url || '#', maxOrder + 1, category, profile, contact_phone, status, profileFile)
+    .run(name.trim(), short, logo, url || '#', maxOrder + 1, category, profile, contact_phone, status, profileFile, type)
   res.status(201).json(db.prepare('SELECT * FROM agencies WHERE id = ?').get(info.lastInsertRowid))
 })
 
@@ -376,7 +377,7 @@ app.put('/api/agencies/:id', adminAuth, companyUpload, (req, res) => {
   const logo = fileUrl(req.files?.logoFile?.[0]) || (req.body.logo ?? e.logo)
   const profileFile = fileUrl(req.files?.profileFile?.[0]) || (req.body.profile_file ?? e.profile_file)
   db.prepare(
-    `UPDATE agencies SET name=?, short=?, logo=?, url=?, category=?, profile=?, contact_phone=?, status=?, profile_file=? WHERE id=?`,
+    `UPDATE agencies SET name=?, short=?, logo=?, url=?, category=?, profile=?, contact_phone=?, status=?, profile_file=?, type=? WHERE id=?`,
   ).run(
     name,
     req.body.short ?? e.short,
@@ -387,6 +388,7 @@ app.put('/api/agencies/:id', adminAuth, companyUpload, (req, res) => {
     req.body.contact_phone ?? e.contact_phone,
     req.body.status ?? e.status,
     profileFile,
+    req.body.type ?? e.type,
     req.params.id,
   )
   res.json(db.prepare('SELECT * FROM agencies WHERE id = ?').get(req.params.id))

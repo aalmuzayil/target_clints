@@ -19,7 +19,8 @@ export default function App() {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
-  const [cat, setCat] = useState('')
+  const [typeF, setTypeF] = useState('') // '' | ministry | authority | company
+  const [cat, setCat] = useState('') // sector, only when typeF === company
   const [view, setView] = useState('all') // all | mine
   const [phone, setPhone] = useState(getPhoneNumber())
   const [name, setName] = useState(getPhoneName())
@@ -52,10 +53,11 @@ export default function App() {
     const q = query.trim()
     return source.filter(
       (c) =>
-        (!cat || c.category === cat) &&
+        (!typeF || c.type === typeF) &&
+        (typeF !== 'company' || !cat || c.category === cat) &&
         (!q || c.name.includes(q) || (c.short || '').includes(q)),
     )
-  }, [source, query, cat])
+  }, [source, query, typeF, cat])
 
   function onLogin(p) {
     setPhone(p)
@@ -89,7 +91,7 @@ export default function App() {
           </svg>
           <input
             type="search"
-            placeholder="ابحث عن شركة"
+            placeholder="ابحث عن جهة"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -107,37 +109,57 @@ export default function App() {
           </div>
         )}
 
-        {/* category chips */}
+        {/* type chips: ministries / authorities / companies */}
         {view === 'all' && (
-          <div className="chips">
-            <button className={!cat ? 'chip active' : 'chip'} onClick={() => setCat('')}>
-              الكل
-            </button>
-            {categories.map((c) => (
-              <button key={c} className={cat === c ? 'chip active' : 'chip'} onClick={() => setCat(c)}>
-                {c}
+          <>
+            <div className="chips">
+              <button className={!typeF ? 'chip active' : 'chip'} onClick={() => { setTypeF(''); setCat('') }}>
+                الكل
               </button>
-            ))}
-          </div>
+              <button className={typeF === 'ministry' ? 'chip active' : 'chip'} onClick={() => { setTypeF('ministry'); setCat('') }}>
+                الوزارات
+              </button>
+              <button className={typeF === 'authority' ? 'chip active' : 'chip'} onClick={() => { setTypeF('authority'); setCat('') }}>
+                الهيئات
+              </button>
+              <button className={typeF === 'company' ? 'chip active' : 'chip'} onClick={() => { setTypeF('company'); setCat('') }}>
+                الشركات
+              </button>
+            </div>
+
+            {/* sector sub-filter, shown only for companies */}
+            {typeF === 'company' && categories.length > 0 && (
+              <div className="chips chips-sub">
+                <button className={!cat ? 'chip active' : 'chip'} onClick={() => setCat('')}>
+                  كل القطاعات
+                </button>
+                {categories.map((c) => (
+                  <button key={c} className={cat === c ? 'chip active' : 'chip'} onClick={() => setCat(c)}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         <div className="list-head">
-          <span className="count">{loading ? 'جارٍ التحميل…' : `${filtered.length} شركة`}</span>
+          <span className="count">{loading ? 'جارٍ التحميل…' : `${filtered.length} جهة`}</span>
           <button className="btn small primary" onClick={() => (getPhoneToken() ? setShowAdd(true) : setShowLogin(true))}>
-            + إضافة شركتي
+            + إضافة جهة
           </button>
         </div>
 
         {loading ? null : filtered.length === 0 ? (
           <div className="empty">
-            {view === 'mine' ? 'لا توجد شركات في قائمتك بعد.' : 'لا توجد نتائج.'}
+            {view === 'mine' ? 'لا توجد جهات في قائمتك بعد.' : 'لا توجد نتائج.'}
           </div>
         ) : (
           <div className="grid">
             {filtered.map((c) => (
               <button key={c.id} className="card" onClick={() => setSelected(c)}>
                 <div className="card-logo">
-                  {c.logo ? <img src={c.logo} alt="" loading="lazy" /> : <span>{c.short || '—'}</span>}
+                  {c.logo ? <img src={c.logo} alt="" loading="lazy" /> : c.short ? <span>{c.short}</span> : <OrgIcon />}
                 </div>
                 <Deadline deadline={c.reserve_deadline} status={c.status} />
                 <h3>{c.name}</h3>
@@ -177,6 +199,14 @@ export default function App() {
         />
       )}
     </div>
+  )
+}
+
+function OrgIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden style={{ color: 'var(--green-3)', opacity: 0.55 }}>
+      <path fill="currentColor" d="M3 21V7l8-4 8 4v14h-5v-5h-6v5H3zm5-9h2v-2H8v2zm0 4h2v-2H8v2zm6-4h2v-2h-2v2zm0 4h2v-2h-2v2z" />
+    </svg>
   )
 }
 

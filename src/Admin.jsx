@@ -155,8 +155,9 @@ function EditModal({ company, onClose, onSaved, onError }) {
   const [form, setForm] = useState({
     name: company.name || '', short: company.short || '', url: company.url && company.url !== '#' ? company.url : '',
     category: company.category || '', profile: company.profile || '', contact_phone: company.contact_phone || '',
-    status: company.status || 'open',
+    status: company.status || 'open', type: company.type || 'company',
   })
+  const TYPES = { ministry: 'وزارة', authority: 'هيئة', company: 'شركة' }
   const [file, setFile] = useState(null)
   const [profileFile, setProfileFile] = useState(null)
   const [deadlineLocal, setDeadlineLocal] = useState(
@@ -199,10 +200,17 @@ function EditModal({ company, onClose, onSaved, onError }) {
     <div className="modal-overlay" onClick={onClose}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h3>{isNew ? 'إضافة شركة' : 'تعديل شركة'}</h3>
-        <label>اسم الشركة *<input value={form.name} onChange={set('name')} required /></label>
+        <label>الاسم *<input value={form.name} onChange={set('name')} required /></label>
+        <label>النوع
+          <div className="seg">
+            {Object.entries(TYPES).map(([k, v]) => (
+              <button type="button" key={k} className={form.type === k ? 'active' : ''} onClick={() => setForm((f) => ({ ...f, type: k }))}>{v}</button>
+            ))}
+          </div>
+        </label>
         <div className="field-row">
           <label>اسم مختصر<input value={form.short} onChange={set('short')} /></label>
-          <label>التصنيف<input value={form.category} onChange={set('category')} /></label>
+          <label>{form.type === 'company' ? 'القطاع' : 'التصنيف'}<input value={form.category} onChange={set('category')} /></label>
         </div>
         <label>رابط الموقع<input value={form.url} onChange={set('url')} placeholder="https://" /></label>
         <label>رقم التواصل (واتساب)<input dir="ltr" value={form.contact_phone} onChange={set('contact_phone')} placeholder="9665XXXXXXXX" /></label>
