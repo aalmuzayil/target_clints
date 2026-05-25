@@ -5,6 +5,7 @@ import multer from 'multer'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import twilio from 'twilio'
 import { db, seed } from './db.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -12,9 +13,18 @@ const ROOT = path.join(__dirname, '..')
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(ROOT, 'data', 'uploads')
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me'
 const PORT = process.env.PORT || 3001
-// OTP delivery: when no provider is configured we run in "dev mode" and return the
-// code in the API response so it can be shown on screen. Plug a provider in sendOtp().
-const OTP_PROVIDER = process.env.OTP_PROVIDER || 'dev'
+// OTP delivery. If Twilio Verify env vars are present we use Twilio (real codes via
+// SMS or WhatsApp). Otherwise we run in "dev mode" and return the code in the response.
+const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID
+const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN
+const TWILIO_VERIFY_SID = process.env.TWILIO_VERIFY_SERVICE_SID
+const OTP_CHANNEL = process.env.OTP_CHANNEL || 'sms' // 'sms' | 'whatsapp' | 'call'
+const DEFAULT_CC = (process.env.DEFAULT_COUNTRY_CODE || '966').replace(/\D/g, '')
+const twilioEnabled = !!(TWILIO_SID && TWILIO_TOKEN && TWILIO_VERIFY_SID)
+const twilioClient = twilioEnabled ? twilio(TWILIO_SID, TWILIO_TOKEN) : null
+// Modes: 'twilio' (real OTP) > 'dev' (code shown on screen, set OTP_DEV=1) > 'none'
+// (no verification: phone is just a login identifier). Default is 'none'.
+const OTP_MODE = twilioEnabled ? `twilio:${OTP_CHANNEL}` : process.env.OTP_DEV === '1' ? 'dev' : 'none'
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 seed()
@@ -61,15 +71,25 @@ function publicCompany(row) {
   return rest
 }
 
-// dev-mode OTP "sender": logs + returns the code to the caller. Replace with Twilio/Meta.
-function sendOtp(phone, code) {
-  console.log(`[otp] ${phone} -> ${code} (provider=${OTP_PROVIDER})`)
-  // if OTP_PROVIDER === 'twilio' { ...send via Twilio... }
-  return OTP_PROVIDER === 'dev'
+// convert a locally-entered number (e.g. 0501234567) to E.164 (+9665XXXXXXXX) for Twilio
+function toE164(raw) {
+  let d = onlyDigits(raw)
+  if (!d) return ''
+  if (d.startsWith('00')) d = d.slice(2)
+  if (d.startsWith(DEFAULT_CC)) return '+' + d
+  if (d.startsWith('0')) d = d.slice(1)
+  return '+' + DEFAULT_CC + d
 }
 
 function sign(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' })
+}
+
+function ensurePhoneUser(phone) {
+  const existing = db.prepare('SELECT 1 FROM phone_users WHERE phone = ?').get(phone)
+  if (!existing) {
+    db.prepare('INSERT INTO phone_users (phone, name, created_at) VALUES (?, ?, ?)').run(phone, '', now())
+  }
 }
 
 function adminAuth(req, res, next) {
@@ -111,29 +131,62 @@ app.post('/api/login', (req, res) => {
 // ============================================================
 //  PHONE (USER) AUTH — OTP
 // ============================================================
-app.post('/api/auth/request-otp', (req, res) => {
+app.post('/api/auth/request-otp', async (req, res) => {
   const phone = onlyDigits(req.body?.phone)
   if (phone.length < 7) return res.status(400).json({ error: 'رقم جوال غير صحيح' })
-  const code = String(Math.floor(1000 + Math.random() * 9000))
+
+  if (twilioEnabled) {
+    try {
+      await twilioClient.verify.v2
+        .services(TWILIO_VERIFY_SID)
+        .verifications.create({ to: toE164(phone), channel: OTP_CHANNEL })
+      return res.json({ ok: true })
+    } catch (e) {
+      console.error('[twilio] send failed:', e?.message)
+      return res.status(502).json({ error: 'تعذّر إرسال رمز التحقق، حاول لاحقاً' })
+    }
+  }
+
+  if (OTP_MODE === 'none') {
+    // no verification: phone is just an identifier -> log in immediately
+    ensurePhoneUser(phone)
+    return res.json({ ok: true, token: sign({ type: 'phone', phone }), phone, skipVerify: true })
+  }
+
+  // dev mode (code shown on screen)
+  const code = String(Math.floor(100000 + Math.random() * 900000))
   db.prepare('INSERT OR REPLACE INTO otps (phone, code, expires_at) VALUES (?, ?, ?)').run(
     phone, code, now() + 5 * 60 * 1000,
   )
-  const devReturned = sendOtp(phone, code)
-  res.json({ ok: true, ...(devReturned ? { devCode: code } : {}) })
+  console.log(`[otp:dev] ${phone} -> ${code}`)
+  res.json({ ok: true, devCode: code })
 })
 
-app.post('/api/auth/verify-otp', (req, res) => {
+app.post('/api/auth/verify-otp', async (req, res) => {
   const phone = onlyDigits(req.body?.phone)
   const code = String(req.body?.code || '')
-  const row = db.prepare('SELECT * FROM otps WHERE phone = ?').get(phone)
-  if (!row || row.code !== code || row.expires_at < now()) {
-    return res.status(401).json({ error: 'رمز التحقق غير صحيح أو منتهي' })
+
+  if (twilioEnabled) {
+    try {
+      const check = await twilioClient.verify.v2
+        .services(TWILIO_VERIFY_SID)
+        .verificationChecks.create({ to: toE164(phone), code })
+      if (check.status !== 'approved') {
+        return res.status(401).json({ error: 'رمز التحقق غير صحيح أو منتهي' })
+      }
+    } catch (e) {
+      console.error('[twilio] check failed:', e?.message)
+      return res.status(401).json({ error: 'رمز التحقق غير صحيح أو منتهي' })
+    }
+  } else {
+    const row = db.prepare('SELECT * FROM otps WHERE phone = ?').get(phone)
+    if (!row || row.code !== code || row.expires_at < now()) {
+      return res.status(401).json({ error: 'رمز التحقق غير صحيح أو منتهي' })
+    }
+    db.prepare('DELETE FROM otps WHERE phone = ?').run(phone)
   }
-  db.prepare('DELETE FROM otps WHERE phone = ?').run(phone)
-  const existing = db.prepare('SELECT * FROM phone_users WHERE phone = ?').get(phone)
-  if (!existing) {
-    db.prepare('INSERT INTO phone_users (phone, name, created_at) VALUES (?, ?, ?)').run(phone, '', now())
-  }
+
+  ensurePhoneUser(phone)
   res.json({ token: sign({ type: 'phone', phone }), phone })
 })
 
@@ -408,4 +461,4 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')))
 }
 
-app.listen(PORT, () => console.log(`[server] listening on http://localhost:${PORT} (otp=${OTP_PROVIDER})`))
+app.listen(PORT, () => console.log(`[server] listening on http://localhost:${PORT} (otp=${OTP_MODE})`))

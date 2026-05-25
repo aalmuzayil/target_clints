@@ -15,6 +15,12 @@ export default function PhoneLogin({ onClose, onSuccess }) {
     setBusy(true)
     try {
       const r = await requestOtp(phone)
+      if (r.skipVerify && r.token) {
+        // no-verification mode: phone is just an identifier, log in immediately
+        setPhoneSession(r.token, r.phone)
+        onSuccess(r.phone)
+        return
+      }
       if (r.devCode) {
         setDevCode(r.devCode)
         setCode(r.devCode) // prefill in dev mode for convenience
@@ -49,7 +55,7 @@ export default function PhoneLogin({ onClose, onSuccess }) {
         {step === 'phone' ? (
           <form onSubmit={send}>
             <h3>تسجيل الدخول</h3>
-            <p className="muted">أدخل رقم جوالك وسنرسل لك رمز التحقق عبر واتساب</p>
+            <p className="muted">أدخل رقم جوالك للمتابعة</p>
             <label>
               رقم الجوال
               <input
@@ -65,7 +71,7 @@ export default function PhoneLogin({ onClose, onSuccess }) {
             </label>
             {error && <div className="form-error">{error}</div>}
             <button className="btn primary full" disabled={busy}>
-              {busy ? '...' : 'إرسال الرمز'}
+              {busy ? '...' : 'متابعة'}
             </button>
           </form>
         ) : (
@@ -85,8 +91,8 @@ export default function PhoneLogin({ onClose, onSuccess }) {
                 type="text"
                 inputMode="numeric"
                 dir="ltr"
-                maxLength={4}
-                placeholder="____"
+                maxLength={6}
+                placeholder="______"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 className="code-input"
