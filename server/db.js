@@ -188,4 +188,13 @@ export function seed() {
     }
   }
   if (added) console.log(`[seed] added ${added} companies (completed + recent)`)
+
+  // one-time cleanup: remove logo-less COMPANIES (keep ministries/authorities).
+  // Guarded by a flag so future admin-added companies are never auto-deleted.
+  const cleaned = db.prepare("SELECT value FROM settings WHERE key = 'cleanup_nologo_companies'").get()?.value
+  if (cleaned !== '1') {
+    const r = db.prepare("DELETE FROM agencies WHERE type = 'company' AND COALESCE(logo, '') = ''").run()
+    db.prepare("INSERT INTO settings (key, value) VALUES ('cleanup_nologo_companies', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    if (r.changes) console.log(`[cleanup] removed ${r.changes} logo-less companies`)
+  }
 }
