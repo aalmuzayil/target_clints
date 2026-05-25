@@ -99,6 +99,8 @@ export const adminAssignUser = (phone, company_id) =>
 export const adminUnassignUser = (phone, company_id) =>
   req(`/api/admin/users/${phone}/unassign`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ company_id }) })
 
+export const adminStats = () => req('/api/admin/stats', { headers: adminH() })
+
 // ---- admin: settings + layered profiles ----
 export const adminGetSettings = () => req('/api/admin/settings', { headers: adminH() })
 export const adminSaveIntro = (intro_message) =>

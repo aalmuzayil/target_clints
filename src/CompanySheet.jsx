@@ -115,7 +115,7 @@ function ReservedOptions({ company, reservation }) {
 
       <button className={picked === 'onbehalf' ? 'opt-card sel' : 'opt-card'} onClick={() => setPicked('onbehalf')}>
         <OptIcon name="call" />
-        <div><strong>نتواصل عنك</strong><span>زوّدنا برقمك وسيتواصل فريق أكثم نيابةً عنك</span></div>
+        <div><strong>نتواصل عنك</strong><span>أعطنا رقم الشخص المعني وسيتواصل معه فريق أكثم</span></div>
       </button>
       {picked === 'onbehalf' && <OnBehalf companyId={company.id} />}
 
@@ -161,11 +161,11 @@ function OnBehalf({ companyId }) {
     e.preventDefault(); setError(''); setBusy(true)
     try { await submitLead(companyId, phone); setDone(true) } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
-  if (done) return <div className="opt-panel success">✓ تم استلام رقمك، وسيتواصل معك فريق أكثم قريباً.</div>
+  if (done) return <div className="opt-panel success">✓ تم استلام الرقم، وسيتواصل فريق أكثم مع الشخص المعني قريباً.</div>
   return (
     <form className="opt-panel" onSubmit={submit}>
       <div className="opt-form-row">
-        <input type="tel" inputMode="tel" dir="ltr" placeholder="05XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+        <input type="tel" inputMode="tel" dir="ltr" placeholder="رقم الشخص المعني 05XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} required />
         <button className="btn primary" disabled={busy}>{busy ? '...' : 'إرسال'}</button>
       </div>
       {error && <div className="form-error">{error}</div>}

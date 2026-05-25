@@ -598,6 +598,39 @@ app.delete('/api/admin/access/:phone', adminAuth, (req, res) => {
 })
 
 // ============================================================
+//  ADMIN: monitoring dashboard stats
+// ============================================================
+app.get('/api/admin/stats', adminAuth, (_req, res) => {
+  const countBy = (col) =>
+    Object.fromEntries(
+      db.prepare(`SELECT ${col} AS k, COUNT(*) AS c FROM agencies WHERE approved = 1 GROUP BY ${col}`).all().map((r) => [r.k, r.c]),
+    )
+  const byStatus = countBy('status')
+  const byType = countBy('type')
+  const bySector = db
+    .prepare("SELECT category AS sector, COUNT(*) AS count FROM agencies WHERE approved = 1 AND type='company' AND category<>'' GROUP BY category ORDER BY count DESC")
+    .all()
+  const totals = {
+    entities: db.prepare('SELECT COUNT(*) AS c FROM agencies WHERE approved = 1').get().c,
+    users: db.prepare("SELECT COUNT(*) AS c FROM phone_users WHERE status='approved'").get().c,
+    pendingUsers: db.prepare("SELECT COUNT(*) AS c FROM phone_users WHERE status='pending'").get().c,
+    reservations: db.prepare('SELECT COUNT(*) AS c FROM reservations').get().c,
+    pendingCompanies: db.prepare('SELECT COUNT(*) AS c FROM agencies WHERE approved = 0').get().c,
+  }
+  const recent = db
+    .prepare(
+      `SELECT r.id, r.phone, r.lead_phone, r.comment, r.status, r.created_at,
+              a.name AS company_name, pu.name AS requester_name, pu.nickname AS requester_nick
+       FROM reservations r
+       JOIN agencies a ON a.id = r.company_id
+       LEFT JOIN phone_users pu ON pu.phone = r.phone
+       ORDER BY r.id DESC LIMIT 50`,
+    )
+    .all()
+  res.json({ byStatus, byType, bySector, totals, recent })
+})
+
+// ============================================================
 //  ADMIN: settings (editable intro) + layered profile files
 // ============================================================
 app.get('/api/admin/settings', adminAuth, (_req, res) => {

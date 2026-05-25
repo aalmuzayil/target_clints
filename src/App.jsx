@@ -20,6 +20,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [typeF, setTypeF] = useState('') // '' | ministry | authority | company
+  const [statusF, setStatusF] = useState('') // '' | open | reserved | completed
   const [cat, setCat] = useState('') // sector, only when typeF === company
   const [view, setView] = useState('all') // all | mine
   const [phone, setPhone] = useState(getPhoneNumber())
@@ -49,15 +50,21 @@ export default function App() {
   }, [view, phone])
 
   const source = view === 'mine' ? mine : companies
+  const counts = useMemo(() => {
+    const c = { open: 0, reserved: 0, completed: 0 }
+    companies.forEach((x) => { if (c[x.status] != null) c[x.status]++ })
+    return c
+  }, [companies])
   const filtered = useMemo(() => {
     const q = query.trim()
     return source.filter(
       (c) =>
         (!typeF || c.type === typeF) &&
+        (!statusF || c.status === statusF) &&
         (typeF !== 'company' || !cat || c.category === cat) &&
         (!q || c.name.includes(q) || (c.short || '').includes(q)),
     )
-  }, [source, query, typeF, cat])
+  }, [source, query, typeF, statusF, cat])
 
   function onLogin(p) {
     setPhone(p)
@@ -105,6 +112,24 @@ export default function App() {
             </button>
             <button className={view === 'mine' ? 'active' : ''} onClick={() => setView('mine')}>
               قائمتي
+            </button>
+          </div>
+        )}
+
+        {/* interactive status counters */}
+        {view === 'all' && (
+          <div className="stats">
+            <button className={statusF === 'open' ? 'stat open active' : 'stat open'} onClick={() => setStatusF(statusF === 'open' ? '' : 'open')}>
+              <span className="stat-num">{counts.open}</span>
+              <span className="stat-label">متوفر</span>
+            </button>
+            <button className={statusF === 'reserved' ? 'stat reserved active' : 'stat reserved'} onClick={() => setStatusF(statusF === 'reserved' ? '' : 'reserved')}>
+              <span className="stat-num">{counts.reserved}</span>
+              <span className="stat-label">محجوز</span>
+            </button>
+            <button className={statusF === 'completed' ? 'stat completed active' : 'stat completed'} onClick={() => setStatusF(statusF === 'completed' ? '' : 'completed')}>
+              <span className="stat-num">{counts.completed}</span>
+              <span className="stat-label">مكتمل</span>
             </button>
           </div>
         )}

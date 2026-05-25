@@ -37,6 +37,7 @@ import {
   adminUserCompanies,
   adminAssignUser,
   adminUnassignUser,
+  adminStats,
   listCompanies,
 } from './api.js'
 import { STATUS, StatusBadge } from './shared.jsx'
@@ -80,7 +81,7 @@ function Login({ onSuccess }) {
 }
 
 function Dashboard({ onLogout }) {
-  const [tab, setTab] = useState('companies')
+  const [tab, setTab] = useState('overview')
   const [error, setError] = useState('')
   function logout() { clearAdminToken(); onLogout() }
   return (
@@ -94,6 +95,7 @@ function Dashboard({ onLogout }) {
       </header>
       <main className="container admin-main">
         <div className="tabs">
+          <button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}>المتابعة</button>
           <button className={tab === 'companies' ? 'active' : ''} onClick={() => setTab('companies')}>الشركات</button>
           <button className={tab === 'reservations' ? 'active' : ''} onClick={() => setTab('reservations')}>طلبات الحجز</button>
           <button className={tab === 'pending' ? 'active' : ''} onClick={() => setTab('pending')}>شركات بانتظار الموافقة</button>
@@ -102,6 +104,7 @@ function Dashboard({ onLogout }) {
           <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>الإعدادات</button>
         </div>
         {error && <div className="form-error">{error}</div>}
+        {tab === 'overview' && <Overview onError={setError} />}
         {tab === 'companies' && <Companies onError={setError} />}
         {tab === 'reservations' && <Reservations onError={setError} />}
         {tab === 'pending' && <Pending onError={setError} />}
@@ -114,6 +117,111 @@ function Dashboard({ onLogout }) {
 }
 
 const EMPTY = { name: '', short: '', url: '', category: '', profile: '', contact_phone: '', status: 'open', logo: '' }
+
+const STATUS_LABEL = { open: 'متوفر', reserved: 'محجوز', completed: 'مكتمل' }
+const TYPE_LABEL = { ministry: 'وزارات', authority: 'هيئات', company: 'شركات' }
+
+function Overview({ onError }) {
+  const [s, setS] = useState(null)
+  useEffect(() => { adminStats().then(setS).catch((e) => onError(e.message)) }, [])
+  if (!s) return <div className="empty">جارٍ التحميل…</div>
+
+  const st = s.byStatus || {}
+  const maxSector = Math.max(1, ...s.bySector.map((x) => x.count))
+  const statusTotal = (st.open || 0) + (st.reserved || 0) + (st.completed || 0)
+
+  return (
+    <div className="overview">
+      {/* KPI cards */}
+      <div className="kpi-grid">
+        <Kpi num={s.totals.entities} label="إجمالي الجهات" />
+        <Kpi num={st.open || 0} label="متوفر" color="var(--green-3)" />
+        <Kpi num={st.reserved || 0} label="محجوز" color="#b8860b" />
+        <Kpi num={st.completed || 0} label="مكتمل" color="#555" />
+        <Kpi num={s.totals.users} label="مستخدمون مفعّلون" />
+        <Kpi num={s.totals.pendingUsers} label="طلبات وصول" />
+        <Kpi num={s.totals.reservations} label="طلبات الحجز" />
+        <Kpi num={s.totals.pendingCompanies} label="بانتظار الموافقة" />
+      </div>
+
+      {/* status distribution bar */}
+      <div className="panel">
+        <h3>توزيع الحالات</h3>
+        <div className="stackbar">
+          {['open', 'reserved', 'completed'].map((k) => {
+            const v = st[k] || 0
+            const pct = statusTotal ? (v / statusTotal) * 100 : 0
+            return v ? <div key={k} className={`seg-${k}`} style={{ width: `${pct}%` }} title={`${STATUS_LABEL[k]}: ${v}`}>{v}</div> : null
+          })}
+        </div>
+        <div className="legend">
+          <span><i className="dot seg-open" /> متوفر {st.open || 0}</span>
+          <span><i className="dot seg-reserved" /> محجوز {st.reserved || 0}</span>
+          <span><i className="dot seg-completed" /> مكتمل {st.completed || 0}</span>
+        </div>
+      </div>
+
+      {/* by type */}
+      <div className="panel">
+        <h3>حسب النوع</h3>
+        {Object.entries(s.byType).map(([k, v]) => (
+          <div className="bar-row" key={k}>
+            <span className="bar-label">{TYPE_LABEL[k] || k}</span>
+            <div className="bar-track"><div className="bar-fill" style={{ width: `${(v / s.totals.entities) * 100}%` }} /></div>
+            <span className="bar-val">{v}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* by sector */}
+      {s.bySector.length > 0 && (
+        <div className="panel">
+          <h3>الشركات حسب القطاع</h3>
+          {s.bySector.map((x) => (
+            <div className="bar-row" key={x.sector}>
+              <span className="bar-label">{x.sector}</span>
+              <div className="bar-track"><div className="bar-fill alt" style={{ width: `${(x.count / maxSector) * 100}%` }} /></div>
+              <span className="bar-val">{x.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* recent reservations table */}
+      <div className="panel">
+        <h3>أحدث طلبات الحجز ({s.recent.length})</h3>
+        {s.recent.length === 0 ? <div className="empty">لا توجد طلبات بعد.</div> : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead><tr><th>الجهة</th><th>الطالب</th><th>رقم المعني</th><th>ملاحظة</th><th>الحالة</th><th>التاريخ</th></tr></thead>
+              <tbody>
+                {s.recent.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.company_name}</td>
+                    <td>{r.requester_nick || r.requester_name || '—'}<br /><span className="muted" dir="ltr">{r.phone}</span></td>
+                    <td dir="ltr">{r.lead_phone || '—'}</td>
+                    <td>{r.comment || '—'}</td>
+                    <td><span className={`badge badge-${r.status === 'approved' ? 'reserved' : r.status}`}>{r.status === 'pending' ? 'قيد المراجعة' : r.status === 'approved' ? 'مقبول' : r.status === 'rejected' ? 'مرفوض' : r.status}</span></td>
+                    <td className="muted">{new Date(r.created_at).toLocaleDateString('ar')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Kpi({ num, label, color }) {
+  return (
+    <div className="kpi">
+      <span className="kpi-num" style={color ? { color } : undefined}>{num}</span>
+      <span className="kpi-label">{label}</span>
+    </div>
+  )
+}
 
 function Companies({ onError }) {
   const [list, setList] = useState([])
@@ -265,7 +373,7 @@ function Reservations({ onError }) {
   function load() { adminReservations('pending').then(setList).catch((e) => onError(e.message)) }
   useEffect(load, [])
   async function approve(r) {
-    try { const res = await adminApproveReservation(r.id); if (res.notifyWhatsappLink) window.open(res.notifyWhatsappLink, '_blank'); load() }
+    try { await adminApproveReservation(r.id); load() }
     catch (e) { onError(e.message) }
   }
   async function reject(r) {
@@ -293,7 +401,7 @@ function Reservations({ onError }) {
                 ) : null}
               </div>
               <div className="row-actions">
-                <button className="btn primary" onClick={() => approve(r)}>قبول + واتساب</button>
+                <button className="btn primary" onClick={() => approve(r)}>قبول</button>
                 <button className="btn danger" onClick={() => reject(r)}>رفض</button>
               </div>
             </div>
@@ -309,7 +417,7 @@ function Pending({ onError }) {
   function load() { adminPending().then(setList).catch((e) => onError(e.message)) }
   useEffect(load, [])
   async function approve(c) {
-    try { const res = await adminApproveCompany(c.id); if (res.verifyWhatsappLink) window.open(res.verifyWhatsappLink, '_blank'); load() }
+    try { await adminApproveCompany(c.id); load() }
     catch (e) { onError(e.message) }
   }
   async function remove(c) {
@@ -328,7 +436,7 @@ function Pending({ onError }) {
                 <div className="row-sub"><span>أضافها:</span><span dir="ltr">{c.submitted_by}</span>{c.category ? <span>· {c.category}</span> : null}</div>
               </div>
               <div className="row-actions">
-                <button className="btn primary" onClick={() => approve(c)}>موافقة + تحقق واتساب</button>
+                <button className="btn primary" onClick={() => approve(c)}>موافقة</button>
                 <button className="btn danger" onClick={() => remove(c)}>رفض</button>
               </div>
             </div>
@@ -366,7 +474,7 @@ function Access({ onError }) {
     try { await adminAddAccess(u.phone, newName.trim(), (newNick || '').trim()); load() } catch (e) { onError(e.message) }
   }
   async function approve(p) {
-    try { const r = await adminApproveAccess(p); if (r.notifyWhatsappLink) window.open(r.notifyWhatsappLink, '_blank'); load() }
+    try { await adminApproveAccess(p); load() }
     catch (e) { onError(e.message) }
   }
   async function reject(p) { try { await adminRejectAccess(p); load() } catch (e) { onError(e.message) } }
@@ -389,7 +497,7 @@ function Access({ onError }) {
                 <div className="row-sub"><span dir="ltr">{u.phone}</span><span>· طلب دخول</span></div>
               </div>
               <div className="row-actions">
-                <button className="btn primary" onClick={() => approve(u.phone)}>قبول + إشعار</button>
+                <button className="btn primary" onClick={() => approve(u.phone)}>قبول</button>
                 <button className="btn danger" onClick={() => reject(u.phone)}>رفض</button>
               </div>
             </div>
