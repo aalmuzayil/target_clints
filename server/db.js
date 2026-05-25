@@ -137,13 +137,12 @@ export function seed() {
   setIfMissing('intro_message', DEFAULT_INTRO)
   setIfMissing('default_profile_file', DEFAULT_PROFILE)
 
-  // load the real dataset once per DATA_VERSION (replaces the catalog; runs on empty
-  // DB or when the dataset version changes). Admin edits persist after this point.
-  const currentVersion = db.prepare("SELECT value FROM settings WHERE key = 'data_version'").get()?.value
-  if (currentVersion !== DATA_VERSION) {
+  // Seed the catalog ONLY when empty, so admin edits/reservations are never wiped
+  // on redeploys (data now persists on the /data volume).
+  const count = db.prepare('SELECT COUNT(*) AS c FROM agencies').get().c
+  if (count === 0) {
     const rows = buildSeedRows()
     const tx = db.transaction(() => {
-      db.exec('DELETE FROM agencies')
       const insert = db.prepare(
         `INSERT INTO agencies (name, short, logo, url, sort_order, category, type, profile, status, approved)
          VALUES (@name, '', @logo, @url, @order, @category, @type, @profile, 'open', 1)`,
