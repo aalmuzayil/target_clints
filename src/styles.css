@@ -207,7 +207,25 @@ button { font-family: inherit; cursor: pointer; }
 .copy-btn { border: 1px solid var(--green); color: var(--green-3); background: #fff; border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 600; }
 .copy-btn:hover { background: var(--green-light); }
 .msg-text { margin: 0; white-space: pre-wrap; word-break: break-word; background: var(--bg); border-radius: 10px; padding: 12px; font-size: 13.5px; color: var(--ink-soft); line-height: 1.7; }
+.opt-card { width: 100%; cursor: pointer; }
+.opt-card.sel { border-color: var(--green); background: var(--green-light); }
 .opt-card.form { flex-direction: column; align-items: stretch; gap: 12px; }
+.opt-panel { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; margin: -4px 0 4px; }
+.opt-panel.success { background: var(--green-light); border-color: #b8e8c8; color: var(--green-3); font-weight: 600; text-align: center; }
+.opt-panel textarea { border: 1px solid var(--line); border-radius: 10px; padding: 11px; font-family: inherit; font-size: 15px; resize: vertical; }
+.confirm-box { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.confirm-box strong { font-size: 16px; }
+.confirm-box span { color: var(--muted); font-size: 14px; }
+.confirm-actions { display: flex; gap: 10px; margin-top: 8px; }
+.confirm-actions .btn { flex: 1; }
+.notice { background: #fff7e6; border: 1px solid #f0c674; border-radius: 14px; padding: 16px; text-align: center; display: flex; flex-direction: column; gap: 4px; }
+.notice strong { color: #8a6d1a; font-size: 16px; }
+.notice span { color: #a98a3a; font-size: 14px; }
+.assign-list { max-height: 50vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; margin: 4px 0; }
+.assign-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; text-align: start; font-family: inherit; cursor: pointer; }
+.assign-row .assign-name { flex: 1; font-size: 14px; }
+.assign-row.on { background: var(--green-light); border-color: var(--green); }
+.assign-row > span:first-child { width: 20px; font-weight: 700; color: var(--green-3); }
 .opt-form-head { display: flex; align-items: center; gap: 14px; }
 .opt-form-row { display: flex; gap: 8px; }
 .opt-form-row input { flex: 1; border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-family: inherit; font-size: 16px; }

@@ -193,8 +193,11 @@ export default function App() {
       {showAdd && (
         <AddCompany
           onClose={() => setShowAdd(false)}
-          onDone={() => {
+          onDone={() => setShowAdd(false)}
+          onOpenExisting={(id) => {
+            const c = companies.find((x) => x.id === id)
             setShowAdd(false)
+            if (c) setSelected(c)
           }}
         />
       )}
@@ -232,10 +235,11 @@ function Header({ phone, name, onLogin, onLogout }) {
   )
 }
 
-function AddCompany({ onClose, onDone }) {
+function AddCompany({ onClose, onDone, onOpenExisting }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState('')
   const [done, setDone] = useState(false)
+  const [existing, setExisting] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -244,13 +248,19 @@ function AddCompany({ onClose, onDone }) {
     setError('')
     setBusy(true)
     try {
-      await submitCompany(name, category)
-      setDone(true)
+      const r = await submitCompany(name, category)
+      if (r.exists) setExisting(r.company)
+      else setDone(true)
     } catch (err) {
       setError(err.message)
     } finally {
       setBusy(false)
     }
+  }
+
+  async function forceAdd() {
+    setBusy(true)
+    try { await submitCompany(name, category, true); setExisting(null); setDone(true) } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
 
   return (
@@ -259,18 +269,29 @@ function AddCompany({ onClose, onDone }) {
         <div className="sheet-handle" />
         {done ? (
           <div className="reserved-block">
-            <div className="reserved-ok">✓ تم إرسال شركتك</div>
-            <p className="muted">
-              ستظهر شركتك في القائمة بعد موافقة الإدارة. إذا لم يحجزها أحد، سنعود إليك.
-            </p>
+            <div className="reserved-ok">✓ تم إرسال الجهة</div>
+            <p className="muted">ستظهر بعد موافقة الإدارة. إذا لم يحجزها أحد، سنعود إليك.</p>
             <button className="btn primary full" onClick={onDone}>تم</button>
+          </div>
+        ) : existing ? (
+          <div className="reserved-block">
+            <div className="notice">
+              <strong>هذه الجهة موجودة بالفعل</strong>
+              <span>«{existing.name}»</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0' }}>
+              <StatusBadge status={existing.status} />
+            </div>
+            <button className="btn primary full" onClick={() => onOpenExisting?.(existing.id)}>عرض الجهة</button>
+            <button className="btn ghost full" onClick={forceAdd} disabled={busy}>ليست نفسها — أضِفها كجديدة</button>
+            <button className="btn ghost full" onClick={() => setExisting(null)}>تعديل الاسم</button>
           </div>
         ) : (
           <form onSubmit={submit}>
-            <h3>إضافة شركتي</h3>
-            <p className="muted">إذا لم تجد شركتك في القائمة، أضِف اسمها وسنراجعها.</p>
+            <h3>إضافة جهة</h3>
+            <p className="muted">إذا لم تجد الجهة في القائمة، أضِف اسمها وسنراجعها.</p>
             <label>
-              اسم الشركة *
+              اسم الجهة *
               <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
             </label>
             <label>

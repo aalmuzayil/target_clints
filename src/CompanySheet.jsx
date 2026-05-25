@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { reserveCompany, submitLead, getPhoneToken } from './api.js'
+import { reserveCompany, submitLead, submitComment, getPhoneToken } from './api.js'
 import { StatusBadge, Deadline } from './shared.jsx'
 
 const FALLBACK_INTRO =
@@ -8,18 +8,26 @@ const DEFAULT_PROFILE = '/aktham-profile.pdf'
 
 export default function CompanySheet({ company, onClose, onNeedLogin, onReserved }) {
   const [reservation, setReservation] = useState(null)
+  const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const canReserve = company.status === 'open' || company.status === 'reserved'
+  const canReserve = company.status === 'open'
+  const statusWord = company.status === 'completed' ? 'مكتملة' : 'محجوزة'
 
-  async function reserve() {
+  function startReserve() {
     if (!getPhoneToken()) return onNeedLogin()
+    setError('')
+    setConfirming(true)
+  }
+
+  async function confirmReserve() {
     setError('')
     setBusy(true)
     try {
       const r = await reserveCompany(company.id)
       setReservation(r)
+      setConfirming(false)
       onReserved?.(r.company)
     } catch (err) {
       setError(err.message)
@@ -63,19 +71,28 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
           </a>
         ) : null}
 
-        {!reservation ? (
+        {reservation ? (
+          <ReservedOptions company={company} reservation={reservation} />
+        ) : !canReserve ? (
+          <div className="notice">
+            <strong>هذه الجهة {statusWord} حالياً</strong>
+            <span>لا يمكن حجزها في الوقت الحالي.</span>
+          </div>
+        ) : confirming ? (
+          <div className="confirm-box">
+            <strong>تأكيد حجز «{company.name}»؟</strong>
+            <span>سيتم حجز الجهة باسمك.</span>
+            {error && <div className="form-error">{error}</div>}
+            <div className="confirm-actions">
+              <button className="btn ghost" onClick={() => setConfirming(false)} disabled={busy}>إلغاء</button>
+              <button className="btn primary" onClick={confirmReserve} disabled={busy}>{busy ? '...' : 'تأكيد'}</button>
+            </div>
+          </div>
+        ) : (
           <>
             {error && <div className="form-error">{error}</div>}
-            {canReserve ? (
-              <button className="btn primary full" onClick={reserve} disabled={busy}>
-                {busy ? '...' : 'حجز هذه الشركة'}
-              </button>
-            ) : (
-              <div className="unavailable">هذه الشركة غير متاحة للحجز حالياً</div>
-            )}
+            <button className="btn primary full" onClick={startReserve}>حجز هذه الجهة</button>
           </>
-        ) : (
-          <ReservedOptions company={company} reservation={reservation} />
         )}
       </div>
     </div>
@@ -83,112 +100,93 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
 }
 
 function ReservedOptions({ company, reservation }) {
-  const [copied, setCopied] = useState(false)
-  // profile file: company-specific > category > global default (resolved by the server)
-  const profilePath = reservation.profile_file || DEFAULT_PROFILE
-  const profileUrl = `${window.location.origin}${profilePath}`
-
-  // option 2: a forwardable message describing Aktham (admin-editable) + the profile link
-  const intro = reservation.introMessage || FALLBACK_INTRO
-  const shareText = `${intro}\n${profileUrl}`
-  const shareLink = `https://wa.me/?text=${encodeURIComponent(shareText)}`
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(shareText)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch {
-      /* clipboard may be blocked; the text is visible to copy manually */
-    }
-  }
+  const [picked, setPicked] = useState(null) // direct | onbehalf | other
 
   return (
     <div className="reserved-block">
-      <div className="reserved-ok">✓ تم تسجيل طلب الحجز — اختر الخطوة التالية</div>
+      <div className="reserved-ok">✓ تم تأكيد حجز «{company.name}»</div>
+      <p className="muted" style={{ textAlign: 'center', margin: '0 0 6px' }}>اختر طريقة المتابعة:</p>
 
-      {/* 1) download the profile */}
-      <a className="opt-card" href={profileUrl} target="_blank" rel="noreferrer" download>
-        <OptIcon name="download" />
-        <div>
-          <strong>تحميل الملف التعريفي</strong>
-          <span>احفظ الملف التعريفي على جهازك</span>
-        </div>
-      </a>
+      <button className={picked === 'direct' ? 'opt-card sel' : 'opt-card'} onClick={() => setPicked('direct')}>
+        <OptIcon name="chat" />
+        <div><strong>التواصل المباشر</strong><span>رسالة واتساب جاهزة للتواصل بنفسك</span></div>
+      </button>
+      {picked === 'direct' && <DirectContact company={company} reservation={reservation} />}
 
-      {/* 2) copyable Aktham intro message + profile link */}
-      <div className="msg-box">
-        <div className="msg-head">
-          <strong>رسالة تعريف بأكثم</strong>
-          <button type="button" className="copy-btn" onClick={copy}>
-            {copied ? 'تم النسخ ✓' : 'نسخ'}
-          </button>
-        </div>
-        <p className="msg-text">{shareText}</p>
-        <a className="btn whatsapp full" href={shareLink} target="_blank" rel="noreferrer">
-          <WaIcon /> إرسال عبر واتساب
-        </a>
-      </div>
+      <button className={picked === 'onbehalf' ? 'opt-card sel' : 'opt-card'} onClick={() => setPicked('onbehalf')}>
+        <OptIcon name="call" />
+        <div><strong>نتواصل عنك</strong><span>زوّدنا برقمك وسيتواصل فريق أكثم نيابةً عنك</span></div>
+      </button>
+      {picked === 'onbehalf' && <OnBehalf companyId={company.id} />}
 
-      {/* 3) give us the concerned person's number */}
-      <LeadForm companyId={company.id} />
+      <button className={picked === 'other' ? 'opt-card sel' : 'opt-card'} onClick={() => setPicked('other')}>
+        <OptIcon name="note" />
+        <div><strong>أخرى</strong><span>اكتب ملاحظة (اختياري)</span></div>
+      </button>
+      {picked === 'other' && <CommentBox companyId={company.id} />}
     </div>
   )
 }
 
-function LeadForm({ companyId }) {
+function DirectContact({ company, reservation }) {
+  const [copied, setCopied] = useState(false)
+  const profilePath = reservation.profile_file || DEFAULT_PROFILE
+  const profileUrl = `${window.location.origin}${profilePath}`
+  const intro = reservation.introMessage || FALLBACK_INTRO
+  const shareText = `${intro}\n${profileUrl}`
+  // contact the entity directly if we have its number, else open WhatsApp chooser
+  const link = reservation.whatsappLink || `https://wa.me/?text=${encodeURIComponent(shareText)}`
+
+  async function copy() {
+    try { await navigator.clipboard.writeText(shareText); setCopied(true); setTimeout(() => setCopied(false), 1800) } catch {}
+  }
+  return (
+    <div className="msg-box">
+      <div className="msg-head">
+        <strong>رسالة جاهزة</strong>
+        <button type="button" className="copy-btn" onClick={copy}>{copied ? 'تم النسخ ✓' : 'نسخ'}</button>
+      </div>
+      <p className="msg-text">{shareText}</p>
+      <a className="btn whatsapp full" href={link} target="_blank" rel="noreferrer"><WaIcon /> فتح واتساب</a>
+    </div>
+  )
+}
+
+function OnBehalf({ companyId }) {
   const [phone, setPhone] = useState('')
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-
   async function submit(e) {
-    e.preventDefault()
-    setError('')
-    setBusy(true)
-    try {
-      await submitLead(companyId, phone)
-      setDone(true)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
+    e.preventDefault(); setError(''); setBusy(true)
+    try { await submitLead(companyId, phone); setDone(true) } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
-
-  if (done) {
-    return (
-      <div className="opt-card success">
-        <OptIcon name="check" />
-        <div>
-          <strong>تم استلام الرقم</strong>
-          <span>سيتواصل فريق أكثم مع الشخص المعني قريباً</span>
-        </div>
-      </div>
-    )
-  }
-
+  if (done) return <div className="opt-panel success">✓ تم استلام رقمك، وسيتواصل معك فريق أكثم قريباً.</div>
   return (
-    <form className="opt-card form" onSubmit={submit}>
-      <div className="opt-form-head">
-        <OptIcon name="call" />
-        <div>
-          <strong>زوّدنا برقم الشخص المعني</strong>
-          <span>وسيتواصل فريق أكثم معه نيابةً عنك</span>
-        </div>
-      </div>
+    <form className="opt-panel" onSubmit={submit}>
       <div className="opt-form-row">
-        <input
-          type="tel"
-          inputMode="tel"
-          dir="ltr"
-          placeholder="05XXXXXXXX"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          required
-        />
+        <input type="tel" inputMode="tel" dir="ltr" placeholder="05XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} required />
         <button className="btn primary" disabled={busy}>{busy ? '...' : 'إرسال'}</button>
       </div>
+      {error && <div className="form-error">{error}</div>}
+    </form>
+  )
+}
+
+function CommentBox({ companyId }) {
+  const [text, setText] = useState('')
+  const [done, setDone] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function submit(e) {
+    e.preventDefault(); setError(''); setBusy(true)
+    try { await submitComment(companyId, text); setDone(true) } catch (err) { setError(err.message) } finally { setBusy(false) }
+  }
+  if (done) return <div className="opt-panel success">✓ تم استلام ملاحظتك، شكراً لك.</div>
+  return (
+    <form className="opt-panel" onSubmit={submit}>
+      <textarea placeholder="اكتب ملاحظتك (اختياري)" value={text} onChange={(e) => setText(e.target.value)} rows={3} />
+      <button className="btn primary full" disabled={busy}>{busy ? '...' : 'إرسال الملاحظة'}</button>
       {error && <div className="form-error">{error}</div>}
     </form>
   )
@@ -197,32 +195,20 @@ function LeadForm({ companyId }) {
 function WaIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
-      <path
-        fill="currentColor"
-        d="M12 2a10 10 0 00-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1012 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.8 0-1.3.7-2 .9-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.5c-.2.2-.3.4-.1.7.2.3.9 1.4 1.9 2 .8.5 1.4.7 1.6.6.2-.1.5-.6.7-.9.1-.2.3-.2.6-.1l1.9.9c.2.1.4.2.4.3.1.1.1.5-.1 1z"
-      />
+      <path fill="currentColor" d="M12 2a10 10 0 00-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1012 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.8 0-1.3.7-2 .9-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.5c-.2.2-.3.4-.1.7.2.3.9 1.4 1.9 2 .8.5 1.4.7 1.6.6.2-.1.5-.6.7-.9.1-.2.3-.2.6-.1l1.9.9c.2.1.4.2.4.3.1.1.1.5-.1 1z" />
     </svg>
   )
 }
 
 function OptIcon({ name }) {
   const paths = {
-    download: 'M12 3v10m0 0l-4-4m4 4l4-4M5 21h14',
-    share: 'M18 8a3 3 0 10-2.8-4H15L9 7.6a3 3 0 100 4.8l6 3.6a3 3 0 102-2.6',
+    chat: 'M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z',
     call: 'M6.6 10.8a15 15 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11 11 0 003.5.56 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1 11 11 0 00.56 3.5 1 1 0 01-.25 1z',
-    check: 'M20 6L9 17l-5-5',
+    note: 'M4 4h16v12l-4 4H4zM14 20v-4h4',
   }
-  const stroke = name === 'download' || name === 'check' || name === 'share'
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden className="opt-icon">
-      <path
-        d={paths[name]}
-        fill={stroke ? 'none' : 'currentColor'}
-        stroke={stroke ? 'currentColor' : 'none'}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d={paths[name]} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

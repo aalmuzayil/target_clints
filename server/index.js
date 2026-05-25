@@ -111,18 +111,23 @@ function accessStatus(phone) {
   const u = db.prepare('SELECT status FROM phone_users WHERE phone = ?').get(phone)
   return u ? u.status : 'none'
 }
-function getName(phone) {
-  const u = db.prepare('SELECT name FROM phone_users WHERE phone = ?').get(phone)
-  return u ? u.name : ''
+function getUser(phone) {
+  return db.prepare('SELECT name, nickname FROM phone_users WHERE phone = ?').get(phone) || { name: '', nickname: '' }
 }
-// upsert a user's status; sets name only when a non-empty name is provided
-function setPhoneUser(phone, status, name) {
-  const u = db.prepare('SELECT name FROM phone_users WHERE phone = ?').get(phone)
+function getName(phone) {
+  return getUser(phone).name || ''
+}
+// upsert a user's status; sets name/nickname only when a non-empty value is provided
+function setPhoneUser(phone, status, name, nickname) {
+  const u = db.prepare('SELECT 1 FROM phone_users WHERE phone = ?').get(phone)
   if (u) {
-    if (name) db.prepare('UPDATE phone_users SET status = ?, name = ? WHERE phone = ?').run(status, name, phone)
-    else db.prepare('UPDATE phone_users SET status = ? WHERE phone = ?').run(status, phone)
+    db.prepare('UPDATE phone_users SET status = ? WHERE phone = ?').run(status, phone)
+    if (name) db.prepare('UPDATE phone_users SET name = ? WHERE phone = ?').run(name, phone)
+    if (nickname) db.prepare('UPDATE phone_users SET nickname = ? WHERE phone = ?').run(nickname, phone)
   } else {
-    db.prepare('INSERT INTO phone_users (phone, name, created_at, status) VALUES (?, ?, ?, ?)').run(phone, name || '', now(), status)
+    db.prepare('INSERT INTO phone_users (phone, name, nickname, created_at, status) VALUES (?, ?, ?, ?, ?)').run(
+      phone, name || '', nickname || '', now(), status,
+    )
   }
 }
 // record an access request for an unknown number (does not downgrade existing users)
@@ -200,7 +205,8 @@ app.post('/api/auth/request-otp', async (req, res) => {
   if (OTP_MODE === 'none') {
     // no verification: phone is just an identifier -> log in immediately
     setPhoneUser(phone, 'approved', name)
-    return res.json({ ok: true, token: sign({ type: 'phone', phone }), phone, name: getName(phone), skipVerify: true })
+    const u = getUser(phone)
+    return res.json({ ok: true, token: sign({ type: 'phone', phone }), phone, name: u.name, nickname: u.nickname, skipVerify: true })
   }
 
   // dev mode (code shown on screen)
@@ -242,12 +248,13 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     return res.status(403).json({ pending: true, error: 'رقمك بانتظار موافقة الإدارة' })
   }
   setPhoneUser(phone, 'approved', name)
-  res.json({ token: sign({ type: 'phone', phone }), phone, name: getName(phone) })
+  const u = getUser(phone)
+  res.json({ token: sign({ type: 'phone', phone }), phone, name: u.name, nickname: u.nickname })
 })
 
 // current user's profile (name shown in the UI)
 app.get('/api/me', phoneAuth, (req, res) => {
-  res.json({ phone: req.phone, name: getName(req.phone) })
+  res.json({ phone: req.phone, ...getUser(req.phone) })
 })
 
 // ============================================================
@@ -285,9 +292,9 @@ const DEFAULT_HOLD_MS = 48 * 60 * 60 * 1000
 
 app.post('/api/companies/:id/reserve', phoneAuth, (req, res) => {
   const c = db.prepare('SELECT * FROM agencies WHERE id = ? AND approved = 1').get(req.params.id)
-  if (!c) return res.status(404).json({ error: 'الشركة غير موجودة' })
-  if (c.status === 'claimed' || c.status === 'completed') {
-    return res.status(409).json({ error: 'هذه الشركة غير متاحة للحجز حالياً' })
+  if (!c) return res.status(404).json({ error: 'الجهة غير موجودة' })
+  if (c.status !== 'open') {
+    return res.status(409).json({ error: 'هذه الجهة غير متاحة للحجز حالياً' })
   }
   const deadline = c.reserve_deadline || now() + DEFAULT_HOLD_MS
   db.prepare("UPDATE agencies SET status='reserved', reserved_by=?, reserve_deadline=? WHERE id=?").run(
@@ -326,9 +333,38 @@ app.post('/api/companies/:id/lead', phoneAuth, (req, res) => {
   res.json({ ok: true })
 })
 
+// optional free-text comment attached to the user's reservation
+app.post('/api/companies/:id/comment', phoneAuth, (req, res) => {
+  const comment = String(req.body?.comment || '').trim()
+  const r = db
+    .prepare("SELECT * FROM reservations WHERE company_id=? AND phone=? AND status='pending' ORDER BY id DESC LIMIT 1")
+    .get(req.params.id, req.phone)
+  if (r) db.prepare('UPDATE reservations SET comment=? WHERE id=?').run(comment, r.id)
+  else
+    db.prepare(
+      "INSERT INTO reservations (company_id, phone, message, status, created_at, comment) VALUES (?, ?, '', 'pending', ?, ?)",
+    ).run(req.params.id, req.phone, now(), comment)
+  res.json({ ok: true })
+})
+
 app.post('/api/companies/submit', phoneAuth, (req, res) => {
   const name = String(req.body?.name || '').trim()
-  if (!name) return res.status(400).json({ error: 'اسم الشركة مطلوب' })
+  if (!name) return res.status(400).json({ error: 'اسم الجهة مطلوب' })
+  // duplicate detection: if an entity with a very similar name exists, return it
+  if (!req.body?.force) {
+    const norm = (s) => s.replace(/[ً-ْـ]/g, '').replace(/[إأآا]/g, 'ا').replace(/ة/g, 'ه').replace(/\s+/g, '')
+    const target = norm(name)
+    const existing = db
+      .prepare('SELECT id, name, status, type, approved FROM agencies')
+      .all()
+      .find((a) => {
+        const n = norm(a.name)
+        return n === target || n.includes(target) || target.includes(n)
+      })
+    if (existing) {
+      return res.json({ exists: true, company: existing })
+    }
+  }
   const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM agencies').get().m
   const info = db
     .prepare(
@@ -435,19 +471,28 @@ app.post('/api/admin/companies/:id/deadline', adminAuth, (req, res) => {
   res.json(db.prepare('SELECT * FROM agencies WHERE id = ?').get(req.params.id))
 })
 
+function assignCompany(phone, companyId) {
+  db.prepare('INSERT OR IGNORE INTO phone_company_links (phone, company_id) VALUES (?, ?)').run(phone, companyId)
+  // linking marks it reserved by this user (status updates) if it was available
+  db.prepare("UPDATE agencies SET status='reserved', reserved_by=? WHERE id=? AND status='open'").run(phone, companyId)
+}
+function unassignCompany(phone, companyId) {
+  db.prepare('DELETE FROM phone_company_links WHERE phone = ? AND company_id = ?').run(phone, companyId)
+  const remaining = db.prepare('SELECT COUNT(*) AS c FROM phone_company_links WHERE company_id = ?').get(companyId).c
+  if (remaining === 0) {
+    db.prepare("UPDATE agencies SET status='open', reserved_by='' WHERE id=? AND reserved_by=?").run(companyId, phone)
+  }
+}
+
 app.post('/api/admin/companies/:id/assign', adminAuth, (req, res) => {
   const phone = onlyDigits(req.body?.phone)
   if (!phone) return res.status(400).json({ error: 'رقم الجوال مطلوب' })
-  db.prepare('INSERT OR IGNORE INTO phone_company_links (phone, company_id) VALUES (?, ?)').run(
-    phone, req.params.id,
-  )
+  assignCompany(phone, Number(req.params.id))
   res.json({ ok: true })
 })
 
 app.post('/api/admin/companies/:id/unassign', adminAuth, (req, res) => {
-  db.prepare('DELETE FROM phone_company_links WHERE phone = ? AND company_id = ?').run(
-    onlyDigits(req.body?.phone), req.params.id,
-  )
+  unassignCompany(onlyDigits(req.body?.phone), Number(req.params.id))
   res.json({ ok: true })
 })
 
@@ -455,6 +500,23 @@ app.get('/api/admin/companies/:id/assignments', adminAuth, (req, res) => {
   res.json(
     db.prepare('SELECT phone FROM phone_company_links WHERE company_id = ?').all(req.params.id).map((r) => r.phone),
   )
+})
+
+// user-centric assignment (link entities to a user from the users list)
+app.get('/api/admin/users/:phone/companies', adminAuth, (req, res) => {
+  const phone = onlyDigits(req.params.phone)
+  const ids = db.prepare('SELECT company_id FROM phone_company_links WHERE phone = ?').all(phone).map((r) => r.company_id)
+  res.json(ids)
+})
+app.post('/api/admin/users/:phone/assign', adminAuth, (req, res) => {
+  const phone = onlyDigits(req.params.phone)
+  assignCompany(phone, Number(req.body?.company_id))
+  res.json({ ok: true })
+})
+app.post('/api/admin/users/:phone/unassign', adminAuth, (req, res) => {
+  const phone = onlyDigits(req.params.phone)
+  unassignCompany(phone, Number(req.body?.company_id))
+  res.json({ ok: true })
 })
 
 // ============================================================
@@ -477,10 +539,11 @@ app.post('/api/admin/reservations/:id/approve', adminAuth, (req, res) => {
   const r = db.prepare('SELECT * FROM reservations WHERE id = ?').get(req.params.id)
   if (!r) return res.status(404).json({ error: 'الطلب غير موجود' })
   db.prepare("UPDATE reservations SET status='approved', decided_at=? WHERE id=?").run(now(), r.id)
-  db.prepare("UPDATE agencies SET status='claimed', reserved_by=? WHERE id=?").run(r.phone, r.company_id)
+  db.prepare("UPDATE agencies SET status='reserved', reserved_by=? WHERE id=?").run(r.phone, r.company_id)
   const c = db.prepare('SELECT * FROM agencies WHERE id = ?').get(r.company_id)
-  const msg = `تم قبول حجزك لشركة "${c?.name}". سنتواصل معك لإتمام الإجراءات.`
-  res.json({ ok: true, notifyWhatsappLink: waLink(r.phone, msg) })
+  const tpl = getSetting('approve_template', 'تم قبول حجزك لجهة «{company}». سنتواصل معك لإتمام الإجراءات.')
+  const msg = tpl.replace(/\{company\}/g, c?.name || '').replace(/\{name\}/g, getName(r.phone) || '')
+  res.json({ ok: true, notifyWhatsappLink: waLink(r.phone, msg), message: msg })
 })
 
 app.post('/api/admin/reservations/:id/reject', adminAuth, (req, res) => {
@@ -500,17 +563,18 @@ app.post('/api/admin/reservations/:id/reject', adminAuth, (req, res) => {
 app.get('/api/admin/access', adminAuth, (req, res) => {
   const status = req.query.status
   const rows = status
-    ? db.prepare('SELECT phone, name, status, created_at FROM phone_users WHERE status = ? ORDER BY created_at DESC').all(status)
-    : db.prepare('SELECT phone, name, status, created_at FROM phone_users ORDER BY created_at DESC').all()
+    ? db.prepare('SELECT phone, name, nickname, status, created_at FROM phone_users WHERE status = ? ORDER BY created_at DESC').all(status)
+    : db.prepare('SELECT phone, name, nickname, status, created_at FROM phone_users ORDER BY created_at DESC').all()
   res.json(rows)
 })
 
-// admin pre-adds (or renames) an approved number with a name
+// admin pre-adds (or renames) an approved number with a name + nickname
 app.post('/api/admin/access', adminAuth, (req, res) => {
   const phone = onlyDigits(req.body?.phone)
   const name = String(req.body?.name || '').trim()
+  const nickname = String(req.body?.nickname || '').trim()
   if (phone.length < 7) return res.status(400).json({ error: 'رقم غير صحيح' })
-  setPhoneUser(phone, 'approved', name)
+  setPhoneUser(phone, 'approved', name, nickname)
   res.status(201).json({ ok: true })
 })
 
@@ -518,8 +582,9 @@ app.post('/api/admin/access', adminAuth, (req, res) => {
 app.post('/api/admin/access/:phone/approve', adminAuth, (req, res) => {
   const phone = onlyDigits(req.params.phone)
   setPhoneUser(phone, 'approved')
-  const msg = 'تم تفعيل رقمك في منصة أكثم. يمكنك الآن تسجيل الدخول والاطلاع على قائمتك.'
-  res.json({ ok: true, notifyWhatsappLink: waLink(phone, msg) })
+  const tpl = getSetting('activate_template', 'تم تفعيل رقمك في منصة أكثم. يمكنك الآن تسجيل الدخول.')
+  const msg = tpl.replace(/\{name\}/g, getName(phone) || '')
+  res.json({ ok: true, notifyWhatsappLink: waLink(phone, msg), message: msg })
 })
 
 app.post('/api/admin/access/:phone/reject', adminAuth, (req, res) => {
@@ -539,11 +604,15 @@ app.get('/api/admin/settings', adminAuth, (_req, res) => {
   res.json({
     intro_message: getSetting('intro_message', DEFAULT_INTRO),
     default_profile_file: getSetting('default_profile_file', DEFAULT_PROFILE),
+    approve_template: getSetting('approve_template', ''),
+    activate_template: getSetting('activate_template', ''),
   })
 })
 
 app.post('/api/admin/settings', adminAuth, (req, res) => {
-  if (typeof req.body?.intro_message === 'string') setSetting('intro_message', req.body.intro_message)
+  for (const k of ['intro_message', 'approve_template', 'activate_template']) {
+    if (typeof req.body?.[k] === 'string') setSetting(k, req.body[k])
+  }
   res.json({ ok: true, intro_message: getSetting('intro_message', DEFAULT_INTRO) })
 })
 

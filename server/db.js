@@ -96,6 +96,10 @@ ensureColumn('reservations', 'lead_phone', "lead_phone TEXT NOT NULL DEFAULT ''"
 ensureColumn('phone_users', 'status', "status TEXT NOT NULL DEFAULT 'approved'")
 // type: 'ministry' | 'authority' | 'company'
 ensureColumn('agencies', 'type', "type TEXT NOT NULL DEFAULT 'company'")
+ensureColumn('reservations', 'comment', "comment TEXT NOT NULL DEFAULT ''")
+ensureColumn('phone_users', 'nickname', "nickname TEXT NOT NULL DEFAULT ''")
+// migrate legacy 'claimed' status to the 3-status model
+db.exec("UPDATE agencies SET status = 'reserved' WHERE status = 'claimed'")
 
 // bump this when the seed dataset changes to force a one-time reload
 const DATA_VERSION = '2025-05-25-real-data-3'
@@ -136,6 +140,8 @@ export function seed() {
   }
   setIfMissing('intro_message', DEFAULT_INTRO)
   setIfMissing('default_profile_file', DEFAULT_PROFILE)
+  setIfMissing('approve_template', 'مرحباً {name}، تم قبول حجزك لجهة «{company}». سنتواصل معك لإتمام الإجراءات.')
+  setIfMissing('activate_template', 'حياك الله {name}، تم تفعيل رقمك في منصة أكثم. يمكنك الآن تسجيل الدخول والاطلاع على قائمتك.')
 
   // Seed the catalog ONLY when empty, so admin edits/reservations are never wiped
   // on redeploys (data now persists on the /data volume).

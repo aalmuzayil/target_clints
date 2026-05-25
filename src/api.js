@@ -44,10 +44,12 @@ export const verifyOtp = (phone, code, name = '') =>
 // ---- user actions ----
 export const reserveCompany = (id, message = '') =>
   req(`/api/companies/${id}/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...phoneH() }, body: JSON.stringify({ message }) })
-export const submitCompany = (name, category = '') =>
-  req('/api/companies/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', ...phoneH() }, body: JSON.stringify({ name, category }) })
+export const submitCompany = (name, category = '', force = false) =>
+  req('/api/companies/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', ...phoneH() }, body: JSON.stringify({ name, category, force }) })
 export const submitLead = (id, phone) =>
   req(`/api/companies/${id}/lead`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...phoneH() }, body: JSON.stringify({ phone }) })
+export const submitComment = (id, comment) =>
+  req(`/api/companies/${id}/comment`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...phoneH() }, body: JSON.stringify({ comment }) })
 export const myCompanies = () => req('/api/me/companies', { headers: phoneH() })
 
 // ---- admin auth ----
@@ -82,19 +84,27 @@ export const adminRejectReservation = (id) =>
 // ---- admin: access control (allowlist) ----
 export const adminAccess = (status) =>
   req(`/api/admin/access${status ? `?status=${status}` : ''}`, { headers: adminH() })
-export const adminAddAccess = (phone, name = '') =>
-  req('/api/admin/access', { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ phone, name }) })
+export const adminAddAccess = (phone, name = '', nickname = '') =>
+  req('/api/admin/access', { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ phone, name, nickname }) })
 export const adminApproveAccess = (phone) =>
   req(`/api/admin/access/${phone}/approve`, { method: 'POST', headers: adminH() })
 export const adminRejectAccess = (phone) =>
   req(`/api/admin/access/${phone}/reject`, { method: 'POST', headers: adminH() })
 export const adminRemoveAccess = (phone) =>
   req(`/api/admin/access/${phone}`, { method: 'DELETE', headers: adminH() })
+export const adminUserCompanies = (phone) =>
+  req(`/api/admin/users/${phone}/companies`, { headers: adminH() })
+export const adminAssignUser = (phone, company_id) =>
+  req(`/api/admin/users/${phone}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ company_id }) })
+export const adminUnassignUser = (phone, company_id) =>
+  req(`/api/admin/users/${phone}/unassign`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ company_id }) })
 
 // ---- admin: settings + layered profiles ----
 export const adminGetSettings = () => req('/api/admin/settings', { headers: adminH() })
 export const adminSaveIntro = (intro_message) =>
   req('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ intro_message }) })
+export const adminSaveSettings = (obj) =>
+  req('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify(obj) })
 export const adminUploadDefaultProfile = (fd) =>
   req('/api/admin/default-profile', { method: 'POST', headers: adminH(), body: fd })
 export const adminCategoryProfiles = () => req('/api/admin/category-profiles', { headers: adminH() })

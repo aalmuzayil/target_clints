@@ -13,7 +13,7 @@ export default function PhoneLogin({ onClose, onSuccess }) {
 
   function loginWith(r) {
     setPhoneSession(r.token, r.phone, r.name)
-    setWelcomeName(r.name || '')
+    setWelcomeName(r.nickname || r.name || '')
     setStep('welcome')
   }
 

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 
 export const STATUS = {
-  open: { label: 'متاحة للتخصيص', cls: 'open' },
-  reserved: { label: 'محجوزة', cls: 'reserved' },
-  claimed: { label: 'مُخصّصة', cls: 'claimed' },
-  completed: { label: 'مكتملة', cls: 'completed' },
+  open: { label: 'متوفر', cls: 'open' },
+  reserved: { label: 'محجوز', cls: 'reserved' },
+  completed: { label: 'مكتمل', cls: 'completed' },
+  // legacy fallback
+  claimed: { label: 'محجوز', cls: 'reserved' },
 }
 
 export function StatusBadge({ status }) {

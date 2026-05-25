@@ -29,10 +29,15 @@ import {
   adminRemoveAccess,
   adminGetSettings,
   adminSaveIntro,
+  adminSaveSettings,
   adminUploadDefaultProfile,
   adminCategoryProfiles,
   adminSetCategoryProfile,
   adminDeleteCategoryProfile,
+  adminUserCompanies,
+  adminAssignUser,
+  adminUnassignUser,
+  listCompanies,
 } from './api.js'
 import { STATUS, StatusBadge } from './shared.jsx'
 
@@ -217,8 +222,8 @@ function EditModal({ company, onClose, onSaved, onError }) {
         <label>نبذة عن الشركة<textarea value={form.profile} onChange={set('profile')} /></label>
         <label>الحالة
           <div className="seg">
-            {Object.entries(STATUS).map(([k, v]) => (
-              <button type="button" key={k} className={form.status === k ? 'active' : ''} onClick={() => setForm((f) => ({ ...f, status: k }))}>{v.label}</button>
+            {['open', 'reserved', 'completed'].map((k) => (
+              <button type="button" key={k} className={form.status === k ? 'active' : ''} onClick={() => setForm((f) => ({ ...f, status: k }))}>{STATUS[k].label}</button>
             ))}
           </div>
         </label>
@@ -339,6 +344,8 @@ function Access({ onError }) {
   const [approved, setApproved] = useState([])
   const [phone, setPhone] = useState('')
   const [name, setName] = useState('')
+  const [nickname, setNickname] = useState('')
+  const [assignUser, setAssignUser] = useState(null)
 
   function load() {
     adminAccess('pending').then(setPending).catch((e) => onError(e.message))
@@ -350,12 +357,13 @@ function Access({ onError }) {
     e.preventDefault()
     const p = phone.replace(/\D/g, '')
     if (!p) return
-    try { await adminAddAccess(p, name); setPhone(''); setName(''); load() } catch (err) { onError(err.message) }
+    try { await adminAddAccess(p, name, nickname); setPhone(''); setName(''); setNickname(''); load() } catch (err) { onError(err.message) }
   }
   async function rename(u) {
-    const newName = prompt('اسم صاحب الرقم:', u.name || '')
+    const newName = prompt('الاسم:', u.name || '')
     if (newName == null) return
-    try { await adminAddAccess(u.phone, newName.trim()); load() } catch (e) { onError(e.message) }
+    const newNick = prompt('الكنية (تظهر في الترحيب، مثال: أبو محمد):', u.nickname || '')
+    try { await adminAddAccess(u.phone, newName.trim(), (newNick || '').trim()); load() } catch (e) { onError(e.message) }
   }
   async function approve(p) {
     try { const r = await adminApproveAccess(p); if (r.notifyWhatsappLink) window.open(r.notifyWhatsappLink, '_blank'); load() }
@@ -391,8 +399,12 @@ function Access({ onError }) {
 
       <div className="admin-head" style={{ marginTop: 24 }}><h2>الأرقام المصرّح لها ({approved.length})</h2></div>
       <form className="rows" style={{ padding: 14, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }} onSubmit={add}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="الاسم"
-          style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 11, fontFamily: 'inherit' }} />
+        <div className="field-row">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="الاسم"
+            style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 11, fontFamily: 'inherit' }} />
+          <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="الكنية (أبو محمد)"
+            style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 11, fontFamily: 'inherit' }} />
+        </div>
         <div className="field-row">
           <input dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05XXXXXXXX"
             style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 11, fontFamily: 'inherit' }} />
@@ -406,23 +418,78 @@ function Access({ onError }) {
           {approved.map((u) => (
             <div className="row" key={u.phone}>
               <div className="row-main">
-                <strong>{u.name || '—'}</strong>
-                <div className="row-sub"><span dir="ltr">{u.phone}</span></div>
+                <strong>{u.nickname || u.name || '—'}</strong>
+                <div className="row-sub">
+                  {u.name && u.nickname ? <span>{u.name}</span> : null}
+                  <span dir="ltr">{u.phone}</span>
+                </div>
               </div>
               <div className="row-actions">
-                <button className="btn ghost" onClick={() => rename(u)}>الاسم</button>
+                <button className="btn ghost" onClick={() => setAssignUser(u)}>ربط جهات</button>
+                <button className="btn ghost" onClick={() => rename(u)}>تعديل</button>
                 <button className="btn danger" onClick={() => remove(u.phone)}>إلغاء</button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {assignUser && (
+        <AssignModal user={assignUser} onClose={() => setAssignUser(null)} onError={onError} />
+      )}
     </>
+  )
+}
+
+function AssignModal({ user, onClose, onError }) {
+  const [companies, setCompanies] = useState([])
+  const [assigned, setAssigned] = useState([]) // array of ids
+  const [q, setQ] = useState('')
+  const [busyId, setBusyId] = useState(null)
+
+  useEffect(() => {
+    Promise.all([listCompanies(), adminUserCompanies(user.phone)])
+      .then(([all, ids]) => { setCompanies(all); setAssigned(ids) })
+      .catch((e) => onError(e.message))
+  }, [user.phone])
+
+  async function toggle(c) {
+    setBusyId(c.id)
+    try {
+      if (assigned.includes(c.id)) { await adminUnassignUser(user.phone, c.id); setAssigned((a) => a.filter((x) => x !== c.id)) }
+      else { await adminAssignUser(user.phone, c.id); setAssigned((a) => [...a, c.id]) }
+    } catch (e) { onError(e.message) } finally { setBusyId(null) }
+  }
+
+  const filtered = companies.filter((c) => !q.trim() || c.name.includes(q.trim()))
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>ربط جهات بـ {user.nickname || user.name || user.phone}</h3>
+        <input placeholder="ابحث عن جهة" value={q} onChange={(e) => setQ(e.target.value)}
+          style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 11, fontFamily: 'inherit', width: '100%' }} />
+        <div className="assign-list">
+          {filtered.map((c) => {
+            const on = assigned.includes(c.id)
+            return (
+              <button key={c.id} className={on ? 'assign-row on' : 'assign-row'} onClick={() => toggle(c)} disabled={busyId === c.id}>
+                <span>{on ? '✓' : '+'}</span>
+                <span className="assign-name">{c.name}</span>
+                <StatusBadge status={c.status} />
+              </button>
+            )
+          })}
+        </div>
+        <button className="btn primary full" onClick={onClose}>تم ({assigned.length} جهة)</button>
+      </div>
+    </div>
   )
 }
 
 function Settings({ onError }) {
   const [intro, setIntro] = useState('')
+  const [approveTpl, setApproveTpl] = useState('')
+  const [activateTpl, setActivateTpl] = useState('')
   const [defaultProfile, setDefaultProfile] = useState('')
   const [savedMsg, setSavedMsg] = useState('')
   const [cats, setCats] = useState([])
@@ -430,14 +497,24 @@ function Settings({ onError }) {
   const [catFile, setCatFile] = useState(null)
 
   function load() {
-    adminGetSettings().then((s) => { setIntro(s.intro_message || ''); setDefaultProfile(s.default_profile_file || '') }).catch((e) => onError(e.message))
+    adminGetSettings().then((s) => {
+      setIntro(s.intro_message || '')
+      setApproveTpl(s.approve_template || '')
+      setActivateTpl(s.activate_template || '')
+      setDefaultProfile(s.default_profile_file || '')
+    }).catch((e) => onError(e.message))
     adminCategoryProfiles().then(setCats).catch((e) => onError(e.message))
   }
   useEffect(load, [])
 
+  function flash() { setSavedMsg('تم الحفظ ✓'); setTimeout(() => setSavedMsg(''), 1800) }
   async function saveIntro(e) {
     e.preventDefault()
-    try { await adminSaveIntro(intro); setSavedMsg('تم الحفظ ✓'); setTimeout(() => setSavedMsg(''), 1800) } catch (err) { onError(err.message) }
+    try { await adminSaveIntro(intro); flash() } catch (err) { onError(err.message) }
+  }
+  async function saveTemplates(e) {
+    e.preventDefault()
+    try { await adminSaveSettings({ approve_template: approveTpl, activate_template: activateTpl }); flash() } catch (err) { onError(err.message) }
   }
   async function uploadDefault(file) {
     if (!file) return
@@ -460,6 +537,21 @@ function Settings({ onError }) {
         <textarea value={intro} onChange={(e) => setIntro(e.target.value)} style={{ ...inputStyle, minHeight: 110, resize: 'vertical' }} />
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button className="btn primary">حفظ الرسالة</button>
+          {savedMsg && <span style={{ color: 'var(--green-3)', fontSize: 14 }}>{savedMsg}</span>}
+        </div>
+      </form>
+
+      <div className="admin-head"><h2>قوالب رسائل الواتساب</h2></div>
+      <form className="rows" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }} onSubmit={saveTemplates}>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>تُرسل من رقم الأدمن عند الموافقة. المتغيرات: {'{name}'} اسم المستخدم، {'{company}'} اسم الجهة.</p>
+        <label style={{ fontSize: 14, color: 'var(--muted)' }}>قالب قبول الحجز
+          <textarea value={approveTpl} onChange={(e) => setApproveTpl(e.target.value)} style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }} />
+        </label>
+        <label style={{ fontSize: 14, color: 'var(--muted)' }}>قالب تفعيل المستخدم
+          <textarea value={activateTpl} onChange={(e) => setActivateTpl(e.target.value)} style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }} />
+        </label>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button className="btn primary">حفظ القوالب</button>
           {savedMsg && <span style={{ color: 'var(--green-3)', fontSize: 14 }}>{savedMsg}</span>}
         </div>
       </form>
