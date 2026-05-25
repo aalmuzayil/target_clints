@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { MINISTRIES, AUTHORITIES, COMPANIES, COMPLETED, RECENT } from './seed-data.js'
+import { MINISTRIES, AUTHORITIES, COMPANIES, COMPLETED, RECENT, TARGET_USERS, TARGET_ASSIGNMENTS } from './seed-data.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -196,5 +196,42 @@ export function seed() {
     const r = db.prepare("DELETE FROM agencies WHERE type = 'company' AND COALESCE(logo, '') = ''").run()
     db.prepare("INSERT INTO settings (key, value) VALUES ('cleanup_nologo_companies', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     if (r.changes) console.log(`[cleanup] removed ${r.changes} logo-less companies`)
+  }
+
+  // one-time targeted-clients import: create accounts, reserve their companies for
+  // 2 weeks, and clear reservations on all other (non-completed) companies.
+  const imported = db.prepare("SELECT value FROM settings WHERE key = 'targeted_clients_v1'").get()?.value
+  if (imported !== '1') {
+    const HOLD_2W = 14 * 24 * 60 * 60 * 1000
+    const deadline = Date.now() + HOLD_2W
+    const upUser = (phone, name, nick) => {
+      const u = db.prepare('SELECT 1 FROM phone_users WHERE phone = ?').get(phone)
+      if (u) db.prepare('UPDATE phone_users SET name=?, nickname=?, status=? WHERE phone=?').run(name, nick, 'approved', phone)
+      else db.prepare("INSERT INTO phone_users (phone, name, nickname, created_at, status) VALUES (?,?,?,?, 'approved')").run(phone, name, nick, Date.now())
+    }
+    TARGET_USERS.forEach((u) => upUser(u.phone, u.name, u.nickname))
+
+    const findByName = db.prepare('SELECT id FROM agencies WHERE name = ?')
+    const insertCo = db.prepare(
+      `INSERT INTO agencies (name, short, logo, url, sort_order, category, type, profile, status, approved)
+       VALUES (?, '', '', '#', ?, '', 'company', '', 'reserved', 1)`,
+    )
+    let ord = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM agencies').get().m
+    const targetIds = []
+    for (const t of TARGET_ASSIGNMENTS) {
+      let row = findByName.get(t.name)
+      let id = row ? row.id : insertCo.run(t.name, ++ord).lastInsertRowid
+      if (targetIds.includes(id)) continue // company already assigned to first owner
+      db.prepare("UPDATE agencies SET status='reserved', reserved_by=?, reserve_deadline=? WHERE id=?").run(t.phone, deadline, id)
+      db.prepare('INSERT OR IGNORE INTO phone_company_links (phone, company_id) VALUES (?, ?)').run(t.phone, id)
+      targetIds.push(id)
+    }
+    // clear reservations on everything else (keep completed as-is)
+    if (targetIds.length) {
+      const ph = targetIds.map(() => '?').join(',')
+      db.prepare(`UPDATE agencies SET status='open', reserved_by='', reserve_deadline=NULL WHERE status='reserved' AND id NOT IN (${ph})`).run(...targetIds)
+    }
+    db.prepare("INSERT INTO settings (key, value) VALUES ('targeted_clients_v1', '1') ON CONFLICT(key) DO UPDATE SET value='1'").run()
+    console.log(`[import] targeted clients: ${TARGET_USERS.length} users, ${targetIds.length} reserved`)
   }
 }
