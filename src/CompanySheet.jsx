@@ -3,7 +3,9 @@ import { reserveCompany, submitLead, getPhoneToken } from './api.js'
 import { StatusBadge, Deadline } from './shared.jsx'
 
 const AKTHAM_BLURB =
-  'مرحباً، أتواصل معكم عبر منصة أكثم لتحليلات القوى العاملة ودعم القرار بالذكاء الاصطناعي.'
+  'مرحباً، أتواصل معكم عبر منصة أكثم — منصة تحليلات القوى العاملة ودعم القرار بالذكاء الاصطناعي.'
+// Aktham's company profile (served from /public). Used unless a company has its own.
+const DEFAULT_PROFILE = '/aktham-profile.pdf'
 
 export default function CompanySheet({ company, onClose, onNeedLogin, onReserved }) {
   const [reservation, setReservation] = useState(null)
@@ -73,38 +75,27 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
 }
 
 function ReservedOptions({ company, reservation }) {
-  const profileUrl = reservation.profile_file
-    ? `${window.location.origin}${reservation.profile_file}`
-    : ''
+  // use the company's own profile file if the admin uploaded one, else Aktham's profile
+  const profilePath = reservation.profile_file || DEFAULT_PROFILE
+  const profileUrl = `${window.location.origin}${profilePath}`
 
   // option 2: a forwardable WhatsApp message describing Aktham + the profile link
   const shareText =
-    `${AKTHAM_BLURB}\n\nأرفق لكم الملف التعريفي لشركة "${company.name}".` +
-    (profileUrl ? `\nرابط الملف التعريفي: ${profileUrl}` : '')
+    `${AKTHAM_BLURB}\n\nأرفق لكم الملف التعريفي للاطلاع:\n${profileUrl}`
   const shareLink = `https://wa.me/?text=${encodeURIComponent(shareText)}`
 
   return (
     <div className="reserved-block">
       <div className="reserved-ok">✓ تم تسجيل طلب الحجز — اختر الخطوة التالية</div>
 
-      {/* 1) download company profile */}
-      {profileUrl ? (
-        <a className="opt-card" href={profileUrl} target="_blank" rel="noreferrer" download>
-          <OptIcon name="download" />
-          <div>
-            <strong>تحميل الملف التعريفي للشركة</strong>
-            <span>احفظ ملف الشركة على جهازك</span>
-          </div>
-        </a>
-      ) : (
-        <div className="opt-card disabled">
-          <OptIcon name="download" />
-          <div>
-            <strong>تحميل الملف التعريفي للشركة</strong>
-            <span>لم تقم الإدارة برفع الملف بعد</span>
-          </div>
+      {/* 1) download the profile */}
+      <a className="opt-card" href={profileUrl} target="_blank" rel="noreferrer" download>
+        <OptIcon name="download" />
+        <div>
+          <strong>تحميل الملف التعريفي</strong>
+          <span>احفظ الملف التعريفي على جهازك</span>
         </div>
-      )}
+      </a>
 
       {/* 2) forwardable Aktham + profile message */}
       <a className="opt-card wa" href={shareLink} target="_blank" rel="noreferrer">
