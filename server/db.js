@@ -77,6 +77,8 @@ ensureColumn('agencies', 'reserve_deadline', 'reserve_deadline INTEGER')
 ensureColumn('agencies', 'reserved_by', "reserved_by TEXT NOT NULL DEFAULT ''")
 ensureColumn('agencies', 'approved', 'approved INTEGER NOT NULL DEFAULT 1')
 ensureColumn('agencies', 'submitted_by', "submitted_by TEXT NOT NULL DEFAULT ''")
+ensureColumn('agencies', 'profile_file', "profile_file TEXT NOT NULL DEFAULT ''")
+ensureColumn('reservations', 'lead_phone', "lead_phone TEXT NOT NULL DEFAULT ''")
 
 const SEED_AGENCIES = [
   { name: 'الهيئة السعودية للبيانات والذكاء الاصطناعي', short: 'سدايا', logo: '/logos/sdaia.jpg', url: 'https://sdaia.gov.sa', category: 'تقنية', status: 'open' },

@@ -143,6 +143,7 @@ function EditModal({ company, onClose, onSaved, onError }) {
     status: company.status || 'open',
   })
   const [file, setFile] = useState(null)
+  const [profileFile, setProfileFile] = useState(null)
   const [deadlineLocal, setDeadlineLocal] = useState(
     company.reserve_deadline ? new Date(company.reserve_deadline).toISOString().slice(0, 16) : '',
   )
@@ -168,6 +169,7 @@ function EditModal({ company, onClose, onSaved, onError }) {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => fd.append(k, v))
       if (file) fd.append('logoFile', file)
+      if (profileFile) fd.append('profileFile', profileFile)
       const saved = isNew ? await adminCreate(fd) : await adminUpdate(company.id, fd)
       const id = saved.id || company.id
       // deadline (only meaningful for existing rows; apply after save)
@@ -200,6 +202,12 @@ function EditModal({ company, onClose, onSaved, onError }) {
         <label>وقت انتهاء الحجز<input type="datetime-local" value={deadlineLocal} onChange={(e) => setDeadlineLocal(e.target.value)} /></label>
         <label>الشعار<input type="file" accept="image/*" onChange={(e) => setFile(e.target.files[0] || null)} /></label>
         {preview ? <div className="logo-preview"><img src={preview} alt="" /></div> : null}
+        <label>الملف التعريفي (PDF)
+          <input type="file" accept=".pdf,application/pdf,image/*" onChange={(e) => setProfileFile(e.target.files[0] || null)} />
+          {company.profile_file && !profileFile ? (
+            <a href={company.profile_file} target="_blank" rel="noreferrer" className="muted" style={{ fontSize: 13, marginTop: 4 }}>الملف الحالي ↗</a>
+          ) : null}
+        </label>
 
         {!isNew && (
           <label>ربط بأرقام جوال (تظهر لهم في قائمتهم)
@@ -245,7 +253,16 @@ function Reservations({ onError }) {
               {r.company_logo ? <img className="row-logo" src={r.company_logo} alt="" /> : <div className="row-logo" />}
               <div className="row-main">
                 <strong>{r.company_name}</strong>
-                <div className="row-sub"><span dir="ltr">{r.phone}</span><span>· {new Date(r.created_at).toLocaleDateString('ar')}</span></div>
+                <div className="row-sub">
+                  <span>الطالب:</span><span dir="ltr">{r.phone}</span>
+                  <span>· {new Date(r.created_at).toLocaleDateString('ar')}</span>
+                </div>
+                {r.lead_phone ? (
+                  <div className="row-sub">
+                    <span>الشخص المعني:</span>
+                    <a href={`https://wa.me/${r.lead_phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" dir="ltr" style={{ color: 'var(--wa)', fontWeight: 700 }}>{r.lead_phone} ↗</a>
+                  </div>
+                ) : null}
               </div>
               <div className="row-actions">
                 <button className="btn primary" onClick={() => approve(r)}>قبول + واتساب</button>

@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { reserveCompany, getPhoneToken } from './api.js'
+import { reserveCompany, submitLead, getPhoneToken } from './api.js'
 import { StatusBadge, Deadline } from './shared.jsx'
 
+const AKTHAM_BLURB =
+  'مرحباً، أتواصل معكم عبر منصة أكثم لتحليلات القوى العاملة ودعم القرار بالذكاء الاصطناعي.'
+
 export default function CompanySheet({ company, onClose, onNeedLogin, onReserved }) {
-  const [reservation, setReservation] = useState(null) // {contact_phone, premadeMessage, whatsappLink}
+  const [reservation, setReservation] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -62,37 +65,137 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
             )}
           </>
         ) : (
-          <div className="reserved-block">
-            <div className="reserved-ok">✓ تم تسجيل طلب الحجز — بانتظار موافقة الإدارة</div>
-            <div className="sheet-section">
-              <h4>رسالة واتساب جاهزة</h4>
-              <p className="premade">{reservation.premadeMessage}</p>
-            </div>
-            {reservation.contact_phone ? (
-              <>
-                <div className="contact-row">
-                  رقم التواصل: <strong dir="ltr">{reservation.contact_phone}</strong>
-                </div>
-                <a className="btn whatsapp full" href={reservation.whatsappLink} target="_blank" rel="noreferrer">
-                  <WaIcon /> فتح المحادثة في واتساب
-                </a>
-              </>
-            ) : (
-              <div className="muted">سيتم تزويدك برقم التواصل بعد موافقة الإدارة.</div>
-            )}
-          </div>
+          <ReservedOptions company={company} reservation={reservation} />
         )}
       </div>
     </div>
   )
 }
 
-function WaIcon() {
+function ReservedOptions({ company, reservation }) {
+  const profileUrl = reservation.profile_file
+    ? `${window.location.origin}${reservation.profile_file}`
+    : ''
+
+  // option 2: a forwardable WhatsApp message describing Aktham + the profile link
+  const shareText =
+    `${AKTHAM_BLURB}\n\nأرفق لكم الملف التعريفي لشركة "${company.name}".` +
+    (profileUrl ? `\nرابط الملف التعريفي: ${profileUrl}` : '')
+  const shareLink = `https://wa.me/?text=${encodeURIComponent(shareText)}`
+
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+    <div className="reserved-block">
+      <div className="reserved-ok">✓ تم تسجيل طلب الحجز — اختر الخطوة التالية</div>
+
+      {/* 1) download company profile */}
+      {profileUrl ? (
+        <a className="opt-card" href={profileUrl} target="_blank" rel="noreferrer" download>
+          <OptIcon name="download" />
+          <div>
+            <strong>تحميل الملف التعريفي للشركة</strong>
+            <span>احفظ ملف الشركة على جهازك</span>
+          </div>
+        </a>
+      ) : (
+        <div className="opt-card disabled">
+          <OptIcon name="download" />
+          <div>
+            <strong>تحميل الملف التعريفي للشركة</strong>
+            <span>لم تقم الإدارة برفع الملف بعد</span>
+          </div>
+        </div>
+      )}
+
+      {/* 2) forwardable Aktham + profile message */}
+      <a className="opt-card wa" href={shareLink} target="_blank" rel="noreferrer">
+        <OptIcon name="share" />
+        <div>
+          <strong>إرسال رسالة تعريف بأكثم</strong>
+          <span>رسالة جاهزة مع الملف التعريفي لإرسالها للشخص المعني</span>
+        </div>
+      </a>
+
+      {/* 3) give us the concerned person's number */}
+      <LeadForm companyId={company.id} />
+    </div>
+  )
+}
+
+function LeadForm({ companyId }) {
+  const [phone, setPhone] = useState('')
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit(e) {
+    e.preventDefault()
+    setError('')
+    setBusy(true)
+    try {
+      await submitLead(companyId, phone)
+      setDone(true)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="opt-card success">
+        <OptIcon name="check" />
+        <div>
+          <strong>تم استلام الرقم</strong>
+          <span>سيتواصل فريق أكثم مع الشخص المعني قريباً</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <form className="opt-card form" onSubmit={submit}>
+      <div className="opt-form-head">
+        <OptIcon name="call" />
+        <div>
+          <strong>زوّدنا برقم الشخص المعني</strong>
+          <span>وسيتواصل فريق أكثم معه نيابةً عنك</span>
+        </div>
+      </div>
+      <div className="opt-form-row">
+        <input
+          type="tel"
+          inputMode="tel"
+          dir="ltr"
+          placeholder="05XXXXXXXX"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          required
+        />
+        <button className="btn primary" disabled={busy}>{busy ? '...' : 'إرسال'}</button>
+      </div>
+      {error && <div className="form-error">{error}</div>}
+    </form>
+  )
+}
+
+function OptIcon({ name }) {
+  const paths = {
+    download: 'M12 3v10m0 0l-4-4m4 4l4-4M5 21h14',
+    share: 'M18 8a3 3 0 10-2.8-4H15L9 7.6a3 3 0 100 4.8l6 3.6a3 3 0 102-2.6',
+    call: 'M6.6 10.8a15 15 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11 11 0 003.5.56 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1 11 11 0 00.56 3.5 1 1 0 01-.25 1z',
+    check: 'M20 6L9 17l-5-5',
+  }
+  const stroke = name === 'download' || name === 'check' || name === 'share'
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden className="opt-icon">
       <path
-        fill="currentColor"
-        d="M12 2a10 10 0 00-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1012 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.8 0-1.3.7-2 .9-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.5c-.2.2-.3.4-.1.7.2.3.9 1.4 1.9 2 .8.5 1.4.7 1.6.6.2-.1.5-.6.7-.9.1-.2.3-.2.6-.1l1.9.9c.2.1.4.2.4.3.1.1.1.5-.1 1z"
+        d={paths[name]}
+        fill={stroke ? 'none' : 'currentColor'}
+        stroke={stroke ? 'currentColor' : 'none'}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   )

@@ -32,9 +32,18 @@ const storage = multer.diskStorage({
 })
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => cb(null, /^image\//.test(file.mimetype)),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.fieldname === 'logoFile') return cb(null, /^image\//.test(file.mimetype))
+    // profileFile: allow PDF / docs / images
+    cb(null, true)
+  },
 })
+const companyUpload = upload.fields([
+  { name: 'logoFile', maxCount: 1 },
+  { name: 'profileFile', maxCount: 1 },
+])
+const fileUrl = (f) => (f ? `/uploads/${f.filename}` : '')
 
 // ---------- helpers ----------
 const now = () => Date.now()
@@ -166,19 +175,36 @@ app.post('/api/companies/:id/reserve', phoneAuth, (req, res) => {
   db.prepare("UPDATE agencies SET status='reserved', reserved_by=?, reserve_deadline=? WHERE id=?").run(
     req.phone, deadline, c.id,
   )
-  db.prepare(
+  const info = db.prepare(
     'INSERT INTO reservations (company_id, phone, message, status, created_at) VALUES (?, ?, ?, ?, ?)',
   ).run(c.id, req.phone, req.body?.message || '', 'pending', now())
 
   const premade = `مرحباً، أنا مهتم بشركة "${c.name}" وأرغب في حجزها. هذا رقمي: ${req.phone}`
   res.json({
     ok: true,
+    reservationId: info.lastInsertRowid,
     company: publicCompany({ ...c, status: 'reserved' }),
     contact_phone: c.contact_phone,
+    profile_file: c.profile_file,
     premadeMessage: premade,
     whatsappLink: c.contact_phone ? waLink(c.contact_phone, premade) : '',
     deadline,
   })
+})
+
+// user gives us the concerned person's number -> Aktham will reach out
+app.post('/api/companies/:id/lead', phoneAuth, (req, res) => {
+  const lead = onlyDigits(req.body?.phone)
+  if (lead.length < 7) return res.status(400).json({ error: 'رقم غير صحيح' })
+  const r = db
+    .prepare("SELECT * FROM reservations WHERE company_id=? AND phone=? AND status='pending' ORDER BY id DESC LIMIT 1")
+    .get(req.params.id, req.phone)
+  if (r) db.prepare('UPDATE reservations SET lead_phone=? WHERE id=?').run(lead, r.id)
+  else
+    db.prepare(
+      "INSERT INTO reservations (company_id, phone, message, status, created_at, lead_phone) VALUES (?, ?, '', 'pending', ?, ?)",
+    ).run(req.params.id, req.phone, now(), lead)
+  res.json({ ok: true })
 })
 
 app.post('/api/companies/submit', phoneAuth, (req, res) => {
@@ -209,28 +235,30 @@ app.get('/api/me/companies', phoneAuth, (req, res) => {
 // ============================================================
 //  ADMIN: companies CRUD
 // ============================================================
-app.post('/api/agencies', adminAuth, upload.single('logoFile'), (req, res) => {
+app.post('/api/agencies', adminAuth, companyUpload, (req, res) => {
   const { name, short = '', url = '#', category = '', profile = '', contact_phone = '', status = 'open' } = req.body || {}
   if (!name || !name.trim()) return res.status(400).json({ error: 'الاسم مطلوب' })
-  const logo = req.file ? `/uploads/${req.file.filename}` : req.body.logo || ''
+  const logo = fileUrl(req.files?.logoFile?.[0]) || req.body.logo || ''
+  const profileFile = fileUrl(req.files?.profileFile?.[0]) || req.body.profile_file || ''
   const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM agencies').get().m
   const info = db
     .prepare(
-      `INSERT INTO agencies (name, short, logo, url, sort_order, category, profile, contact_phone, status, approved)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      `INSERT INTO agencies (name, short, logo, url, sort_order, category, profile, contact_phone, status, profile_file, approved)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     )
-    .run(name.trim(), short, logo, url || '#', maxOrder + 1, category, profile, contact_phone, status)
+    .run(name.trim(), short, logo, url || '#', maxOrder + 1, category, profile, contact_phone, status, profileFile)
   res.status(201).json(db.prepare('SELECT * FROM agencies WHERE id = ?').get(info.lastInsertRowid))
 })
 
-app.put('/api/agencies/:id', adminAuth, upload.single('logoFile'), (req, res) => {
+app.put('/api/agencies/:id', adminAuth, companyUpload, (req, res) => {
   const e = db.prepare('SELECT * FROM agencies WHERE id = ?').get(req.params.id)
   if (!e) return res.status(404).json({ error: 'غير موجودة' })
   const name = (req.body.name ?? e.name).trim()
   if (!name) return res.status(400).json({ error: 'الاسم مطلوب' })
-  const logo = req.file ? `/uploads/${req.file.filename}` : req.body.logo ?? e.logo
+  const logo = fileUrl(req.files?.logoFile?.[0]) || (req.body.logo ?? e.logo)
+  const profileFile = fileUrl(req.files?.profileFile?.[0]) || (req.body.profile_file ?? e.profile_file)
   db.prepare(
-    `UPDATE agencies SET name=?, short=?, logo=?, url=?, category=?, profile=?, contact_phone=?, status=? WHERE id=?`,
+    `UPDATE agencies SET name=?, short=?, logo=?, url=?, category=?, profile=?, contact_phone=?, status=?, profile_file=? WHERE id=?`,
   ).run(
     name,
     req.body.short ?? e.short,
@@ -240,6 +268,7 @@ app.put('/api/agencies/:id', adminAuth, upload.single('logoFile'), (req, res) =>
     req.body.profile ?? e.profile,
     req.body.contact_phone ?? e.contact_phone,
     req.body.status ?? e.status,
+    profileFile,
     req.params.id,
   )
   res.json(db.prepare('SELECT * FROM agencies WHERE id = ?').get(req.params.id))

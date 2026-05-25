@@ -42,6 +42,8 @@ export const reserveCompany = (id, message = '') =>
   req(`/api/companies/${id}/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...phoneH() }, body: JSON.stringify({ message }) })
 export const submitCompany = (name, category = '') =>
   req('/api/companies/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', ...phoneH() }, body: JSON.stringify({ name, category }) })
+export const submitLead = (id, phone) =>
+  req(`/api/companies/${id}/lead`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...phoneH() }, body: JSON.stringify({ phone }) })
 export const myCompanies = () => req('/api/me/companies', { headers: phoneH() })
 
 // ---- admin auth ----
