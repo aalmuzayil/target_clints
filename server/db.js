@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { MINISTRIES, AUTHORITIES, COMPANIES, COMPLETED, RECENT, TARGET_USERS, TARGET_ASSIGNMENTS } from './seed-data.js'
 import { NAME_EN } from './names-en.js'
 import { BRIEFS } from './briefs.js'
+import { ATTRITION } from './attrition.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -268,5 +269,16 @@ export function seed() {
     }
     db.prepare("INSERT INTO settings (key, value) VALUES ('briefs_backfill_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[backfill] briefs appended to ${n} entities`)
+  }
+
+  // one-time attrition backfill from LinkedIn industry data: set the critical
+  // attrition rate only where unset, so admin edits are preserved.
+  const attrDone = db.prepare("SELECT value FROM settings WHERE key = 'attrition_backfill_v1'").get()?.value
+  if (attrDone !== '1') {
+    const upd = db.prepare('UPDATE agencies SET attrition_rate = ? WHERE name = ? AND attrition_rate IS NULL')
+    let n = 0
+    for (const [name, rate] of Object.entries(ATTRITION)) n += upd.run(rate, name).changes
+    db.prepare("INSERT INTO settings (key, value) VALUES ('attrition_backfill_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[backfill] attrition_rate set on ${n} entities`)
   }
 }
