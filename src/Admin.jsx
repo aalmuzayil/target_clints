@@ -41,6 +41,9 @@ import {
   adminListAdmins,
   adminCreateAdmin,
   adminDeleteAdmin,
+  adminAnalytics,
+  adminEvents,
+  adminDownloadEvents,
   listCompanies,
 } from './api.js'
 import { STATUS, StatusBadge } from './shared.jsx'
@@ -99,6 +102,7 @@ function Dashboard({ onLogout }) {
       <main className="container admin-main">
         <div className="tabs">
           <button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}>المتابعة</button>
+          <button className={tab === 'analytics' ? 'active' : ''} onClick={() => setTab('analytics')}>التحليلات</button>
           <button className={tab === 'companies' ? 'active' : ''} onClick={() => setTab('companies')}>الشركات</button>
           <button className={tab === 'reservations' ? 'active' : ''} onClick={() => setTab('reservations')}>طلبات الحجز</button>
           <button className={tab === 'pending' ? 'active' : ''} onClick={() => setTab('pending')}>شركات بانتظار الموافقة</button>
@@ -108,6 +112,7 @@ function Dashboard({ onLogout }) {
         </div>
         {error && <div className="form-error">{error}</div>}
         {tab === 'overview' && <Overview onError={setError} />}
+        {tab === 'analytics' && <Analytics onError={setError} />}
         {tab === 'companies' && <Companies onError={setError} />}
         {tab === 'reservations' && <Reservations onError={setError} />}
         {tab === 'pending' && <Pending onError={setError} />}
@@ -223,6 +228,105 @@ function Kpi({ num, label, color }) {
       <span className="kpi-num" style={color ? { color } : undefined}>{num}</span>
       <span className="kpi-label">{label}</span>
     </div>
+  )
+}
+
+const EVENT_LABELS = {
+  reserve: 'حجز',
+  completed: 'إكمال (تمّ)',
+  status_change: 'تغيير حالة',
+  lead: 'إرفاق رقم',
+  comment: 'ملاحظة',
+  reservation_approved: 'قبول حجز',
+  reservation_rejected: 'رفض حجز',
+  assigned: 'تعيين',
+  unassigned: 'إلغاء تعيين',
+  submitted: 'إضافة جهة',
+}
+function fmtDuration(ms) {
+  if (!ms || ms <= 0) return '—'
+  const d = Math.floor(ms / 86400000)
+  const h = Math.floor((ms % 86400000) / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  if (d > 0) return `${d} يوم${h ? ` ${h} ساعة` : ''}`
+  if (h > 0) return `${h} ساعة${m ? ` ${m} دقيقة` : ''}`
+  return `${m} دقيقة`
+}
+function fmtDate(ts) {
+  try { return new Date(ts).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short' }) } catch { return '' }
+}
+
+function Analytics({ onError }) {
+  const [a, setA] = useState(null)
+  const [events, setEvents] = useState([])
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    adminAnalytics().then(setA).catch((e) => onError(e.message))
+    adminEvents(100).then(setEvents).catch((e) => onError(e.message))
+  }, [])
+  async function exportCsv() {
+    setBusy(true)
+    try { await adminDownloadEvents() } catch (e) { onError(e.message) } finally { setBusy(false) }
+  }
+  if (!a) return <div className="empty">جارٍ التحميل…</div>
+  const ec = a.eventCounts || {}
+  return (
+    <>
+      <div className="admin-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>تحليلات المبيعات</h2>
+        <button className="btn primary small" onClick={exportCsv} disabled={busy}>{busy ? '...' : '⬇ تصدير CSV'}</button>
+      </div>
+
+      <div className="kpi-grid" style={{ marginBottom: 16 }}>
+        <Kpi num={a.resTotals.total} label="إجمالي الحجوزات" />
+        <Kpi num={a.resTotals.approved} label="حجوزات مقبولة" color="var(--green-3)" />
+        <Kpi num={a.completedCount} label="مكتملة (تمّت)" color="#1d6fc7" />
+        <Kpi num={a.resTotals.pending} label="بانتظار القرار" color="#ea7a17" />
+      </div>
+
+      <div className="kpi-grid" style={{ marginBottom: 20 }}>
+        <Kpi num={fmtDuration(a.avgReserveToCompleteMs)} label="متوسط الزمن: حجز ← إكمال" />
+        <Kpi num={fmtDuration(a.avgDecisionMs)} label="متوسط زمن البتّ في الحجز" />
+        <Kpi num={a.eventsTotal} label="إجمالي الأحداث المسجّلة" />
+      </div>
+
+      <div className="admin-head"><h2>الأحداث حسب النوع</h2></div>
+      <div className="rows" style={{ marginBottom: 20 }}>
+        {Object.keys(ec).length === 0 ? (
+          <div className="empty">لا توجد أحداث مسجّلة بعد. ستُسجّل الأحداث الجديدة من الآن.</div>
+        ) : (
+          Object.entries(ec).sort((x, y) => y[1] - x[1]).map(([k, v]) => (
+            <div className="row" key={k}>
+              <div className="row-main"><strong>{EVENT_LABELS[k] || k}</strong></div>
+              <div className="row-actions"><strong>{v}</strong></div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="admin-head"><h2>سجلّ النشاط ({events.length})</h2></div>
+      {events.length === 0 ? (
+        <div className="empty">لا يوجد نشاط بعد.</div>
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr><th>التاريخ</th><th>الحدث</th><th>الجهة</th><th>المنفّذ</th></tr>
+            </thead>
+            <tbody>
+              {events.map((e) => (
+                <tr key={e.id}>
+                  <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(e.created_at)}</td>
+                  <td>{EVENT_LABELS[e.type] || e.type}</td>
+                  <td>{e.company_name || '—'}</td>
+                  <td dir="ltr" style={{ textAlign: 'start' }}>{e.actor || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   )
 }
 

@@ -74,6 +74,19 @@ db.exec(`
     category TEXT PRIMARY KEY,
     profile_file TEXT NOT NULL DEFAULT ''
   );
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,
+    company_id INTEGER,
+    company_name TEXT NOT NULL DEFAULT '',
+    actor TEXT NOT NULL DEFAULT '',
+    from_status TEXT NOT NULL DEFAULT '',
+    to_status TEXT NOT NULL DEFAULT '',
+    meta TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_events_company ON events(company_id);
+  CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
 `)
 
 export const DEFAULT_INTRO =

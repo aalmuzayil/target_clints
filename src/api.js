@@ -102,6 +102,23 @@ export const adminUnassignUser = (phone, company_id) =>
 
 export const adminStats = () => req('/api/admin/stats', { headers: adminH() })
 
+// ---- admin: sales analytics ----
+export const adminAnalytics = () => req('/api/admin/analytics', { headers: adminH() })
+export const adminEvents = (limit = 100) => req(`/api/admin/events?limit=${limit}`, { headers: adminH() })
+export async function adminDownloadEvents() {
+  const res = await fetch('/api/admin/events.csv', { headers: adminH() })
+  if (!res.ok) throw new Error('فشل تنزيل الملف')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `aktham-events-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 // ---- admin: settings + layered profiles ----
 export const adminGetSettings = () => req('/api/admin/settings', { headers: adminH() })
 export const adminSaveIntro = (intro_message) =>

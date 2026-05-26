@@ -59,6 +59,28 @@ const fileUrl = (f) => (f ? `/uploads/${f.filename}` : '')
 const now = () => Date.now()
 const onlyDigits = (s) => String(s || '').replace(/\D/g, '')
 
+// append an immutable analytics event (sales-funnel tracking). Never throws.
+const logEvent = (e) => {
+  try {
+    db.prepare(
+      `INSERT INTO events (type, company_id, company_name, actor, from_status, to_status, meta, created_at)
+       VALUES (@type, @company_id, @company_name, @actor, @from_status, @to_status, @meta, @created_at)`,
+    ).run({
+      type: e.type,
+      company_id: e.company_id ?? null,
+      company_name: e.company_name || '',
+      actor: e.actor || '',
+      from_status: e.from_status || '',
+      to_status: e.to_status || '',
+      meta: e.meta ? JSON.stringify(e.meta) : '',
+      created_at: now(),
+    })
+  } catch (err) {
+    console.error('[events] log failed', err.message)
+  }
+}
+const getCompanyName = (id) => db.prepare('SELECT name FROM agencies WHERE id = ?').get(id)?.name || ''
+
 function waLink(phone, text) {
   const digits = onlyDigits(phone)
   if (!digits) return ''
@@ -306,6 +328,7 @@ app.post('/api/companies/:id/reserve', phoneAuth, (req, res) => {
   const info = db.prepare(
     'INSERT INTO reservations (company_id, phone, message, status, created_at) VALUES (?, ?, ?, ?, ?)',
   ).run(c.id, req.phone, req.body?.message || '', 'pending', now())
+  logEvent({ type: 'reserve', company_id: c.id, company_name: c.name, actor: req.phone, from_status: 'open', to_status: 'reserved' })
 
   const premade = `مرحباً، أنا مهتم بشركة "${c.name}" وأرغب في حجزها. هذا رقمي: ${req.phone}`
   res.json({
@@ -333,6 +356,7 @@ app.post('/api/companies/:id/lead', phoneAuth, (req, res) => {
     db.prepare(
       "INSERT INTO reservations (company_id, phone, message, status, created_at, lead_phone) VALUES (?, ?, '', 'pending', ?, ?)",
     ).run(req.params.id, req.phone, now(), lead)
+  logEvent({ type: 'lead', company_id: Number(req.params.id), company_name: getCompanyName(req.params.id), actor: req.phone, meta: { lead_phone: lead } })
   res.json({ ok: true })
 })
 
@@ -347,6 +371,7 @@ app.post('/api/companies/:id/comment', phoneAuth, (req, res) => {
     db.prepare(
       "INSERT INTO reservations (company_id, phone, message, status, created_at, comment) VALUES (?, ?, '', 'pending', ?, ?)",
     ).run(req.params.id, req.phone, now(), comment)
+  logEvent({ type: 'comment', company_id: Number(req.params.id), company_name: getCompanyName(req.params.id), actor: req.phone, meta: { comment } })
   res.json({ ok: true })
 })
 
@@ -375,6 +400,7 @@ app.post('/api/companies/submit', phoneAuth, (req, res) => {
        VALUES (?, ?, ?, 'open', 0, ?)`,
     )
     .run(name, maxOrder + 1, String(req.body?.category || '').trim(), req.phone)
+  logEvent({ type: 'submitted', company_id: info.lastInsertRowid, company_name: name, actor: req.phone })
   res.status(201).json({ ok: true, id: info.lastInsertRowid, pending: true })
 })
 
@@ -438,6 +464,14 @@ app.put('/api/agencies/:id', adminAuth, companyUpload, (req, res) => {
     attrition,
     req.params.id,
   )
+  const newStatus = req.body.status ?? e.status
+  if (newStatus !== e.status) {
+    logEvent({
+      type: newStatus === 'completed' ? 'completed' : 'status_change',
+      company_id: Number(req.params.id), company_name: name,
+      actor: req.admin?.email || 'admin', from_status: e.status, to_status: newStatus,
+    })
+  }
   res.json(db.prepare('SELECT * FROM agencies WHERE id = ?').get(req.params.id))
 })
 
@@ -469,10 +503,16 @@ app.post('/api/admin/companies/:id/status', adminAuth, (req, res) => {
   if (!['open', 'reserved', 'claimed', 'completed'].includes(status)) {
     return res.status(400).json({ error: 'حالة غير صحيحة' })
   }
+  const prev = db.prepare('SELECT name, status FROM agencies WHERE id = ?').get(req.params.id)
   const clearOwner = status === 'open'
   db.prepare(`UPDATE agencies SET status=?${clearOwner ? ", reserved_by=''" : ''} WHERE id=?`).run(
     status, req.params.id,
   )
+  logEvent({
+    type: status === 'completed' ? 'completed' : 'status_change',
+    company_id: Number(req.params.id), company_name: prev?.name || '',
+    actor: req.admin?.email || 'admin', from_status: prev?.status || '', to_status: status,
+  })
   res.json(db.prepare('SELECT * FROM agencies WHERE id = ?').get(req.params.id))
 })
 
@@ -486,6 +526,7 @@ function assignCompany(phone, companyId) {
   db.prepare('INSERT OR IGNORE INTO phone_company_links (phone, company_id) VALUES (?, ?)').run(phone, companyId)
   // linking marks it reserved by this user (status updates) if it was available
   db.prepare("UPDATE agencies SET status='reserved', reserved_by=? WHERE id=? AND status='open'").run(phone, companyId)
+  logEvent({ type: 'assigned', company_id: companyId, company_name: getCompanyName(companyId), actor: 'admin', to_status: 'reserved', meta: { user: phone } })
 }
 function unassignCompany(phone, companyId) {
   db.prepare('DELETE FROM phone_company_links WHERE phone = ? AND company_id = ?').run(phone, companyId)
@@ -493,6 +534,7 @@ function unassignCompany(phone, companyId) {
   if (remaining === 0) {
     db.prepare("UPDATE agencies SET status='open', reserved_by='' WHERE id=? AND reserved_by=?").run(companyId, phone)
   }
+  logEvent({ type: 'unassigned', company_id: companyId, company_name: getCompanyName(companyId), actor: 'admin', meta: { user: phone } })
 }
 
 app.post('/api/admin/companies/:id/assign', adminAuth, (req, res) => {
@@ -552,6 +594,7 @@ app.post('/api/admin/reservations/:id/approve', adminAuth, (req, res) => {
   db.prepare("UPDATE reservations SET status='approved', decided_at=? WHERE id=?").run(now(), r.id)
   db.prepare("UPDATE agencies SET status='reserved', reserved_by=? WHERE id=?").run(r.phone, r.company_id)
   const c = db.prepare('SELECT * FROM agencies WHERE id = ?').get(r.company_id)
+  logEvent({ type: 'reservation_approved', company_id: r.company_id, company_name: c?.name || '', actor: req.admin?.email || 'admin', to_status: 'reserved', meta: { requester: r.phone } })
   const tpl = getSetting('approve_template', 'تم قبول حجزك لجهة «{company}». سنتواصل معك لإتمام الإجراءات.')
   const msg = tpl.replace(/\{company\}/g, c?.name || '').replace(/\{name\}/g, getName(r.phone) || '')
   res.json({ ok: true, notifyWhatsappLink: waLink(r.phone, msg), message: msg })
@@ -565,6 +608,7 @@ app.post('/api/admin/reservations/:id/reject', adminAuth, (req, res) => {
   db.prepare("UPDATE agencies SET status='open', reserved_by='' WHERE id=? AND reserved_by=?").run(
     r.company_id, r.phone,
   )
+  logEvent({ type: 'reservation_rejected', company_id: r.company_id, company_name: getCompanyName(r.company_id), actor: req.admin?.email || 'admin', to_status: 'open', meta: { requester: r.phone } })
   res.json({ ok: true })
 })
 
@@ -639,6 +683,93 @@ app.get('/api/admin/stats', adminAuth, (_req, res) => {
     )
     .all()
   res.json({ byStatus, byType, bySector, totals, recent })
+})
+
+// ============================================================
+//  ADMIN: sales analytics (event log + averages)
+// ============================================================
+app.get('/api/admin/analytics', adminAuth, (_req, res) => {
+  const DAY = 86400000
+
+  // event counts by type
+  const eventCounts = Object.fromEntries(
+    db.prepare('SELECT type AS k, COUNT(*) AS c FROM events GROUP BY type').all().map((r) => [r.k, r.c]),
+  )
+
+  // current entity status distribution
+  const byStatus = Object.fromEntries(
+    db.prepare("SELECT status AS k, COUNT(*) AS c FROM agencies WHERE approved = 1 GROUP BY status").all().map((r) => [r.k, r.c]),
+  )
+
+  // reservation funnel + decision timing (from the reservations table)
+  const resTotals = {
+    total: db.prepare('SELECT COUNT(*) AS c FROM reservations').get().c,
+    approved: db.prepare("SELECT COUNT(*) AS c FROM reservations WHERE status='approved'").get().c,
+    rejected: db.prepare("SELECT COUNT(*) AS c FROM reservations WHERE status='rejected'").get().c,
+    pending: db.prepare("SELECT COUNT(*) AS c FROM reservations WHERE status='pending'").get().c,
+  }
+  const avgDecisionMs = db
+    .prepare("SELECT AVG(decided_at - created_at) AS a FROM reservations WHERE decided_at IS NOT NULL AND decided_at > created_at")
+    .get().a || 0
+
+  // average time reserved -> completed, computed per entity from the event log
+  // (first 'reserve'/'reservation_approved'/'assigned' time vs first 'completed' time)
+  const reservedAt = db
+    .prepare("SELECT company_id, MIN(created_at) AS t FROM events WHERE type IN ('reserve','reservation_approved','assigned') AND company_id IS NOT NULL GROUP BY company_id")
+    .all()
+  const completedAt = Object.fromEntries(
+    db.prepare("SELECT company_id, MIN(created_at) AS t FROM events WHERE type='completed' AND company_id IS NOT NULL GROUP BY company_id").all().map((r) => [r.company_id, r.t]),
+  )
+  const durations = []
+  for (const r of reservedAt) {
+    const ct = completedAt[r.company_id]
+    if (ct && ct > r.t) durations.push(ct - r.t)
+  }
+  const avgReserveToCompleteMs = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0
+
+  // daily activity for the last 30 days (reserve + completed counts)
+  const since = now() - 30 * DAY
+  const daily = db
+    .prepare(
+      `SELECT (created_at / ${DAY}) AS day, type, COUNT(*) AS c
+       FROM events WHERE created_at >= ? AND type IN ('reserve','completed','lead','reservation_approved')
+       GROUP BY day, type ORDER BY day ASC`,
+    )
+    .all(since)
+
+  res.json({
+    eventCounts,
+    byStatus,
+    resTotals,
+    avgDecisionMs,
+    avgReserveToCompleteMs,
+    completedCount: byStatus.completed || 0,
+    daily,
+    eventsTotal: db.prepare('SELECT COUNT(*) AS c FROM events').get().c,
+  })
+})
+
+// recent raw events (for the activity feed)
+app.get('/api/admin/events', adminAuth, (req, res) => {
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100))
+  res.json(db.prepare('SELECT * FROM events ORDER BY id DESC LIMIT ?').all(limit))
+})
+
+// full event log as CSV (one-click export for sales analysis)
+app.get('/api/admin/events.csv', adminAuth, (_req, res) => {
+  const rows = db.prepare('SELECT id, type, company_id, company_name, actor, from_status, to_status, meta, created_at FROM events ORDER BY id ASC').all()
+  const esc = (v) => {
+    const s = v == null ? '' : String(v)
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const header = ['id', 'type', 'company_id', 'company_name', 'actor', 'from_status', 'to_status', 'meta', 'created_at', 'datetime']
+  const lines = [header.join(',')]
+  for (const r of rows) {
+    lines.push([r.id, r.type, r.company_id, r.company_name, r.actor, r.from_status, r.to_status, r.meta, r.created_at, new Date(r.created_at).toISOString()].map(esc).join(','))
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+  res.setHeader('Content-Disposition', `attachment; filename="aktham-events-${new Date().toISOString().slice(0, 10)}.csv"`)
+  res.send('﻿' + lines.join('\n'))
 })
 
 // ============================================================
