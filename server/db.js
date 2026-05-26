@@ -7,6 +7,7 @@ import { MINISTRIES, AUTHORITIES, COMPANIES, COMPLETED, RECENT, TARGET_USERS, TA
 import { NAME_EN } from './names-en.js'
 import { BRIEFS } from './briefs.js'
 import { ATTRITION } from './attrition.js'
+import { PROSPECTS } from './prospects.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -280,5 +281,25 @@ export function seed() {
     for (const [name, rate] of Object.entries(ATTRITION)) n += upd.run(rate, name).changes
     db.prepare("INSERT INTO settings (key, value) VALUES ('attrition_backfill_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[backfill] attrition_rate set on ${n} entities`)
+  }
+
+  // one-time prospects import: add high-attrition Saudi entities (from LinkedIn
+  // data) as open targets if they don't already exist.
+  const prosDone = db.prepare("SELECT value FROM settings WHERE key = 'prospects_import_v1'").get()?.value
+  if (prosDone !== '1') {
+    const exists = db.prepare('SELECT 1 FROM agencies WHERE name = ?')
+    const ins = db.prepare(
+      `INSERT INTO agencies (name, name_en, short, logo, url, sort_order, category, type, profile, status, approved, attrition_rate)
+       VALUES (?, ?, '', '', '#', ?, ?, 'company', ?, 'open', 1, ?)`,
+    )
+    let ord = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM agencies').get().m
+    let n = 0
+    for (const p of PROSPECTS) {
+      if (exists.get(p.name)) continue
+      ins.run(p.name, p.name, ++ord, p.category || '', p.brief || '', p.attrition ?? null)
+      n++
+    }
+    db.prepare("INSERT INTO settings (key, value) VALUES ('prospects_import_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[import] prospects added: ${n}`)
   }
 }
