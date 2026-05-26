@@ -281,7 +281,7 @@ html[dir="rtl"] .switch input:checked + .track .knob { transform: translateX(-18
 .sheet-logo span { color: var(--green-3); font-weight: 700; }
 .sheet-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .sheet-section { margin: 16px 0; }
-.sheet-section p { margin: 0; color: var(--ink-soft); font-size: 14px; }
+.sheet-section p { margin: 0; color: var(--ink-soft); font-size: 14px; white-space: pre-wrap; }
 .premade { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 14px; }
 .contact-row { margin: 10px 0; font-size: 15px; }
 .unavailable { text-align: center; color: var(--muted); padding: 14px; background: var(--bg); border-radius: 12px; }

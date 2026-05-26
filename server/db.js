@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { MINISTRIES, AUTHORITIES, COMPANIES, COMPLETED, RECENT, TARGET_USERS, TARGET_ASSIGNMENTS } from './seed-data.js'
 import { NAME_EN } from './names-en.js'
+import { BRIEFS } from './briefs.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -157,6 +158,7 @@ export function seed() {
     db.prepare("INSERT INTO settings (key, value) VALUES ('name_en_backfill_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[backfill] name_en set on ${n} entities`)
   }
+
   setIfMissing('approve_template', 'مرحباً {name}، تم قبول حجزك لجهة «{company}». سنتواصل معك لإتمام الإجراءات.')
   setIfMissing('activate_template', 'حياك الله {name}، تم تفعيل رقمك في منصة أكثم. يمكنك الآن تسجيل الدخول والاطلاع على قائمتك.')
 
@@ -250,5 +252,21 @@ export function seed() {
     }
     db.prepare("INSERT INTO settings (key, value) VALUES ('targeted_clients_v1', '1') ON CONFLICT(key) DO UPDATE SET value='1'").run()
     console.log(`[import] targeted clients: ${TARGET_USERS.length} users, ${targetIds.length} reserved`)
+  }
+
+  // one-time briefs backfill (runs AFTER agencies exist): append the 3
+  // LinkedIn-derived pain points to the existing profile, keeping the intro.
+  const briefsDone = db.prepare("SELECT value FROM settings WHERE key = 'briefs_backfill_v1'").get()?.value
+  if (briefsDone !== '1') {
+    const upd = db.prepare(
+      "UPDATE agencies SET profile = CASE WHEN TRIM(COALESCE(profile, '')) = '' THEN ? ELSE TRIM(profile) || char(10) || char(10) || ? END WHERE name = ?",
+    )
+    let n = 0
+    for (const [name, pts] of Object.entries(BRIEFS)) {
+      const block = 'أبرز التحديات (وفق بيانات LinkedIn):\n• ' + pts.join('\n• ')
+      n += upd.run(block, block, name).changes
+    }
+    db.prepare("INSERT INTO settings (key, value) VALUES ('briefs_backfill_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[backfill] briefs appended to ${n} entities`)
   }
 }
