@@ -8,6 +8,7 @@ import { NAME_EN } from './names-en.js'
 import { BRIEFS } from './briefs.js'
 import { ATTRITION } from './attrition.js'
 import { PROSPECTS } from './prospects.js'
+import { TADAWUL } from './tadawul.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -301,6 +302,25 @@ export function seed() {
     }
     db.prepare("INSERT INTO settings (key, value) VALUES ('prospects_import_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[import] prospects added: ${n}`)
+  }
+
+  // one-time import: add all Tadawul-listed entities (logo + brief + link).
+  const tadDone = db.prepare("SELECT value FROM settings WHERE key = 'tadawul_import_v1'").get()?.value
+  if (tadDone !== '1') {
+    const exists = db.prepare('SELECT 1 FROM agencies WHERE name = ?')
+    const ins = db.prepare(
+      `INSERT INTO agencies (name, name_en, short, logo, url, sort_order, category, type, profile, status, approved)
+       VALUES (?, '', '', ?, ?, ?, '', 'company', ?, 'open', 1)`,
+    )
+    let ord = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM agencies').get().m
+    let n = 0
+    for (const e of TADAWUL) {
+      if (exists.get(e.name)) continue
+      ins.run(e.name, e.logo || '', e.url || '#', ++ord, e.brief || '')
+      n++
+    }
+    db.prepare("INSERT INTO settings (key, value) VALUES ('tadawul_import_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[import] tadawul entities added: ${n}`)
   }
 
   // one-time label fix: drop the "(وفق بيانات LinkedIn)" note from existing briefs.
