@@ -29,7 +29,7 @@ button { font-family: inherit; cursor: pointer; }
 
 .container { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 26px; }
 @media (max-width: 600px) {
-  .container { padding: 0 30px; }
+  .container { padding: 0 34px; }
   .main { padding-top: 22px; }
   .grid { gap: 12px; }
   .stats { gap: 10px; }
