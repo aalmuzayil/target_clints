@@ -58,12 +58,7 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
           </div>
         </div>
 
-        {company.profile ? (
-          <div className="sheet-section">
-            <h4>نبذة</h4>
-            <p>{company.profile}</p>
-          </div>
-        ) : null}
+        {company.profile ? <Challenges profile={company.profile} /> : null}
 
         {company.url && company.url !== '#' ? (
           <a className="site-link" href={company.url} target="_blank" rel="noreferrer">
@@ -100,6 +95,70 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
       </div>
     </div>
   )
+}
+
+// renders the entity brief: intro paragraph + the "أبرز التحديات" pain points
+// as small visual charts (bars for percentages, a number callout for net loss)
+const CHAL_MARKER = 'أبرز التحديات:'
+function Challenges({ profile }) {
+  const idx = profile.indexOf(CHAL_MARKER)
+  const intro = (idx >= 0 ? profile.slice(0, idx) : profile).trim()
+  const rest = idx >= 0 ? profile.slice(idx + CHAL_MARKER.length) : ''
+  const items = rest.split('•').map((s) => s.trim()).filter(Boolean)
+  return (
+    <>
+      {intro ? (
+        <div className="sheet-section">
+          <h4>نبذة</h4>
+          <p>{intro}</p>
+        </div>
+      ) : null}
+      {items.length > 0 ? (
+        <div className="sheet-section">
+          <h4>أبرز التحديات</h4>
+          <div className="chal-list">
+            {items.map((it, i) => <ChallengeRow key={i} text={it} />)}
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+function ChallengeRow({ text }) {
+  // the metric lives in the TRAILING parenthetical; an inner "(GSM)"/"(CRM)" in
+  // the skill name must be ignored, so anchor to the last "(...)" before the end.
+  const tail = text.match(/\(([^)]*)\)\s*\.?\s*$/)
+  const meta = tail ? tail[1] : ''
+  const label = (tail ? text.slice(0, tail.index) : text).replace(/\s*\.\s*$/, '').trim()
+  const pct = meta.match(/(\d+(?:\.\d+)?)\s*%/)
+  const cnt = meta.match(/(\d+)\s*موظف/)
+  if (pct) {
+    const v = parseFloat(pct[1])
+    const caption = /تراجع/.test(meta) ? 'تراجع المهارة خلال عام' : 'أعلى معدّل تسرّب داخل المنشأة'
+    return (
+      <div className="chal">
+        <div className="chal-top">
+          <span className="chal-label">{label}</span>
+          <span className="chal-val">{pct[1]}%</span>
+        </div>
+        <div className="chal-bar"><span style={{ width: `${Math.max(3, Math.min(100, v))}%` }} /></div>
+        <span className="chal-cap">{caption}</span>
+      </div>
+    )
+  }
+  if (cnt) {
+    return (
+      <div className="chal chal-count">
+        <div className="chal-num">−{cnt[1]}</div>
+        <div className="chal-num-side">
+          <span className="chal-label">{label}</span>
+          <span className="chal-cap">صافي خسارة الموظفين خلال عام</span>
+        </div>
+      </div>
+    )
+  }
+  return <div className="chal chal-text">{label}.</div>
 }
 
 function ReservedOptions({ company, reservation }) {

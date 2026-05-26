@@ -266,6 +266,24 @@ html[dir="rtl"] .switch input:checked + .track .knob { transform: translateX(-18
 
 .empty { background: #fff; border: 1px dashed var(--line); border-radius: var(--radius); padding: 40px; text-align: center; color: var(--muted); }
 
+/* pain-point charts (entity sheet) */
+.chal-list { display: flex; flex-direction: column; gap: 16px; }
+.chal { display: flex; flex-direction: column; gap: 6px; }
+.chal-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.chal-label { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.45; }
+.chal-val { font-size: 15px; font-weight: 800; color: #ea7a17; flex-shrink: 0; }
+.chal-bar { height: 9px; border-radius: 999px; background: #f0e7df; overflow: hidden; }
+.chal-bar span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #f6a657, #ea7a17); }
+.chal-cap { font-size: 11.5px; color: var(--muted); }
+.chal-count { flex-direction: row; align-items: center; gap: 12px; }
+.chal-num {
+  flex-shrink: 0; min-width: 58px; padding: 8px 10px; text-align: center; line-height: 1;
+  font-size: 24px; font-weight: 800; color: #ea7a17; background: #fff3e8; border-radius: 14px;
+}
+.chal-num-side { display: flex; flex-direction: column; gap: 3px; }
+.chal-text { position: relative; padding-inline-start: 16px; font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; }
+.chal-text::before { content: '•'; position: absolute; inset-inline-start: 0; color: #ea7a17; font-weight: 800; }
+
 /* ---------- bottom sheets / modals ---------- */
 .sheet-overlay {
   position: fixed; inset: 0; background: rgba(51,52,63,0.5);
