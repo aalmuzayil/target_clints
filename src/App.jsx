@@ -15,6 +15,7 @@ import { StatusBadge, Deadline, monogram } from './shared.jsx'
 import PhoneLogin from './PhoneLogin.jsx'
 import CompanySheet from './CompanySheet.jsx'
 import HeroIntro from './HeroIntro.jsx'
+import LogoMarquee from './LogoMarquee.jsx'
 import { useLang } from './i18n.jsx'
 
 // fallback "high attrition" threshold; real value comes from admin settings
@@ -40,6 +41,7 @@ export default function App() {
   const [highOnly, setHighOnly] = useState(false) // filter: high attrition only
   const [highThreshold, setHighThreshold] = useState(DEFAULT_HIGH_ATTRITION) // admin-set
   const [page, setPage] = useState(0) // current page (0-indexed)
+  const [layout, setLayout] = useState('list') // list | grid
   const [phone, setPhone] = useState(getPhoneNumber())
   const [name, setName] = useState(getPhoneName())
   const [showLogin, setShowLogin] = useState(false)
@@ -173,7 +175,7 @@ export default function App() {
             <label className="switch">
               <input type="checkbox" checked={highOnly} onChange={(e) => setHighOnly(e.target.checked)} />
               <span className="track"><span className="knob" /></span>
-              <span className="switch-label">{t('highToggle', highThreshold)}</span>
+              <span className="switch-label"><NeedIcon /> {t('highToggle', highThreshold)}</span>
             </label>
             <p className="attr-def">{t('indexDef', highThreshold)}</p>
           </div>
@@ -181,14 +183,41 @@ export default function App() {
 
         <div className="list-head">
           <span className="count">{loading ? t('loading') : t('entities', filtered.length)}</span>
-          <button className="btn small primary" onClick={() => (getPhoneToken() ? setShowAdd(true) : setShowLogin(true))}>
-            {t('addEntity')}
-          </button>
+          <div className="lh-actions">
+            <div className="view-mode" role="group" aria-label="view mode">
+              <button className={layout === 'list' ? 'active' : ''} onClick={() => setLayout('list')} aria-label="list view"><ListIcon /></button>
+              <button className={layout === 'grid' ? 'active' : ''} onClick={() => setLayout('grid')} aria-label="grid view"><GridIcon /></button>
+            </div>
+            <button className="btn small primary" onClick={() => (getPhoneToken() ? setShowAdd(true) : setShowLogin(true))}>
+              {t('addEntity')}
+            </button>
+          </div>
         </div>
 
         {loading ? null : filtered.length === 0 ? (
           <div className="empty">
             {view === 'mine' ? t('noMine') : t('noResults')}
+          </div>
+        ) : layout === 'grid' ? (
+          <div className="grid">
+            {pageItems.map((c) => (
+              <button key={c.id} className="card" onClick={() => setSelected(c)}>
+                <div className="card-logo-wrap">
+                  <div className="card-logo">
+                    {c.logo ? <img src={c.logo} alt="" loading="lazy" /> : <span>{c.short || monogram(displayName(c))}</span>}
+                  </div>
+                  {c.attrition_rate != null && c.attrition_rate !== '' && (
+                    <span className={'dir-mark' + (Number(c.attrition_rate) >= highThreshold ? ' high' : '')}>{c.attrition_rate}%</span>
+                  )}
+                </div>
+                <Deadline deadline={c.reserve_deadline} status={c.status} />
+                <h3>{displayName(c)}</h3>
+                <div className="card-foot">
+                  <StatusBadge status={c.status} />
+                  {c.category ? <span className="chip-sm">{c.category}</span> : null}
+                </div>
+              </button>
+            ))}
           </div>
         ) : (
           <div className="dir-list">
@@ -246,6 +275,10 @@ export default function App() {
         )}
       </main>
 
+      <section className="clients-strip">
+        <LogoMarquee />
+      </section>
+
       <Footer />
 
       {showLogin && <PhoneLogin onClose={() => setShowLogin(false)} onSuccess={onLogin} />}
@@ -275,6 +308,28 @@ export default function App() {
         />
       )}
     </div>
+  )
+}
+
+function NeedIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden className="need-icon">
+      <path fill="currentColor" d="M13 2L4.5 13.5h6L11 22l8.5-11.5h-6L13 2z" />
+    </svg>
+  )
+}
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+    </svg>
+  )
+}
+function GridIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />
+    </svg>
   )
 }
 

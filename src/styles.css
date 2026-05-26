@@ -182,9 +182,24 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .pager-btn:disabled { opacity: 0.35; cursor: default; }
 .pager-info { font-size: 14px; font-weight: 700; color: var(--ink); min-width: 58px; text-align: center; }
 
-/* ---------- high-attrition filter switch + index definition (Frame 1334) ---------- */
-.attr-bar { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 14px; padding: 14px 16px; background: var(--card); border-radius: 16px; }
-.attr-def { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+/* ---------- list / grid view-mode toggle ---------- */
+.lh-actions { display: flex; align-items: center; gap: 8px; }
+.view-mode { display: flex; gap: 2px; background: #f0f0f1; border-radius: 11px; padding: 3px; }
+.view-mode button { border: 0; background: transparent; padding: 7px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); transition: 0.15s; }
+.view-mode button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+
+/* attrition badge anchor for grid cards */
+.card-logo-wrap { position: relative; width: 100%; }
+
+/* clients marquee strip (below the list, no label) */
+.clients-strip { background: #fff; padding: 22px 0 28px; }
+
+/* ---------- "highest need" filter switch + index definition ---------- */
+.attr-bar { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 14px; padding: 14px 16px; background: #fff7e6; border: 1px solid #f3dca6; border-radius: 16px; }
+.attr-def { margin: 0; font-size: 12.5px; color: #9a7b2e; line-height: 1.55; }
+.need-icon { color: #e08a0c; vertical-align: -2px; margin-inline-end: 4px; }
+.attr-bar .switch-label { color: #8a6d1a; display: inline-flex; align-items: center; }
+.attr-bar .switch input:checked + .track { background: #e08a0c; }
 .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
 .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
 .switch .track { width: 44px; height: 26px; border-radius: 999px; background: #d6dad8; transition: background .2s; flex-shrink: 0; position: relative; }

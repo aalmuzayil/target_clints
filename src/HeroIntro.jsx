@@ -1,5 +1,4 @@
 import IconDeck from './IconDeck.jsx'
-import LogoMarquee from './LogoMarquee.jsx'
 import { useLang } from './i18n.jsx'
 
 // Frame 1334 top: hero (icon deck + heading + subtitle), then the interactive
@@ -12,11 +11,6 @@ export default function HeroIntro({ view = 'all', onAll, onMine }) {
         <IconDeck />
         <h1>{t('heroTitle')}</h1>
         <p>{t('heroSub')}</p>
-
-        <div className="mb-trusted-inline">
-          <span className="mb-trusted-label">{t('trusted')}</span>
-          <LogoMarquee />
-        </div>
 
         <div className="mb-cta">
           <a
