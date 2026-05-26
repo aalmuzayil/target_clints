@@ -13,6 +13,19 @@ export function StatusBadge({ status }) {
   return <span className={`badge badge-${s.cls}`}>{s.label}</span>
 }
 
+// short display label for entities without a logo: drops the generic
+// prefix (وزارة / الهيئة / شركة …) and keeps the distinctive part of the name
+const NAME_PREFIXES = ['وزارة', 'الهيئة العامة', 'الهيئة السعودية', 'الهيئة', 'هيئة', 'الشركة', 'شركة', 'مؤسسة', 'بنك', 'مصرف', 'مجموعة', 'صندوق', 'مركز', 'منصة', 'نادي']
+export function monogram(name) {
+  if (!name) return '—'
+  let s = name.replace(/\s*\([^)]*\)\s*/g, ' ').trim() // strip parenthetical
+  for (const p of NAME_PREFIXES) {
+    if (s.startsWith(p + ' ')) { s = s.slice(p.length).trim(); break }
+  }
+  const words = s.split(/\s+/).filter(Boolean)
+  return words.slice(0, 2).join(' ') || name
+}
+
 export function fmtRemaining(ms) {
   if (ms <= 0) return 'انتهى الوقت'
   const d = Math.floor(ms / 86400000)

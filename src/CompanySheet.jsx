@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { reserveCompany, submitLead, submitComment, getPhoneToken } from './api.js'
-import { StatusBadge, Deadline } from './shared.jsx'
+import { StatusBadge, Deadline, monogram } from './shared.jsx'
 
 const FALLBACK_INTRO =
   'مرحباً، أتواصل معكم عبر منصة أكثم — منصة تحليلات القوى العاملة ودعم القرار بالذكاء الاصطناعي.'
@@ -43,7 +43,7 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
 
         <div className="sheet-head">
           <div className="sheet-logo">
-            {company.logo ? <img src={company.logo} alt="" /> : <span>{company.short || '—'}</span>}
+            {company.logo ? <img src={company.logo} alt="" /> : <span>{company.short || monogram(company.name)}</span>}
           </div>
           <div>
             <h3>{company.name}</h3>

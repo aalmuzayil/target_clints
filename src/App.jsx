@@ -10,7 +10,7 @@ import {
   getPhoneToken,
   clearPhoneSession,
 } from './api.js'
-import { StatusBadge, Deadline } from './shared.jsx'
+import { StatusBadge, Deadline, monogram } from './shared.jsx'
 import PhoneLogin from './PhoneLogin.jsx'
 import CompanySheet from './CompanySheet.jsx'
 
@@ -184,7 +184,7 @@ export default function App() {
             {filtered.map((c) => (
               <button key={c.id} className="card" onClick={() => setSelected(c)}>
                 <div className="card-logo">
-                  {c.logo ? <img src={c.logo} alt="" loading="lazy" /> : c.short ? <span>{c.short}</span> : <OrgIcon />}
+                  {c.logo ? <img src={c.logo} alt="" loading="lazy" /> : <span>{c.short || monogram(c.name)}</span>}
                 </div>
                 <Deadline deadline={c.reserve_deadline} status={c.status} />
                 <h3>{c.name}</h3>
@@ -227,14 +227,6 @@ export default function App() {
         />
       )}
     </div>
-  )
-}
-
-function OrgIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden style={{ color: 'var(--green-3)', opacity: 0.55 }}>
-      <path fill="currentColor" d="M3 21V7l8-4 8 4v14h-5v-5h-6v5H3zm5-9h2v-2H8v2zm0 4h2v-2H8v2zm6-4h2v-2h-2v2zm0 4h2v-2h-2v2z" />
-    </svg>
   )
 }
 
