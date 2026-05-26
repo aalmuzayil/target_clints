@@ -265,7 +265,7 @@ export function seed() {
     )
     let n = 0
     for (const [name, pts] of Object.entries(BRIEFS)) {
-      const block = 'أبرز التحديات (وفق بيانات LinkedIn):\n• ' + pts.join('\n• ')
+      const block = 'أبرز التحديات:\n• ' + pts.join('\n• ')
       n += upd.run(block, block, name).changes
     }
     db.prepare("INSERT INTO settings (key, value) VALUES ('briefs_backfill_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
@@ -301,5 +301,15 @@ export function seed() {
     }
     db.prepare("INSERT INTO settings (key, value) VALUES ('prospects_import_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[import] prospects added: ${n}`)
+  }
+
+  // one-time label fix: drop the "(وفق بيانات LinkedIn)" note from existing briefs.
+  const labelFix = db.prepare("SELECT value FROM settings WHERE key = 'briefs_label_fix_v1'").get()?.value
+  if (labelFix !== '1') {
+    const r = db
+      .prepare("UPDATE agencies SET profile = REPLACE(profile, 'أبرز التحديات (وفق بيانات LinkedIn):', 'أبرز التحديات:') WHERE profile LIKE '%وفق بيانات LinkedIn%'")
+      .run()
+    db.prepare("INSERT INTO settings (key, value) VALUES ('briefs_label_fix_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[fix] brief label cleaned on ${r.changes} entities`)
   }
 }
