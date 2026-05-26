@@ -692,6 +692,31 @@ app.delete('/api/admin/category-profiles/:category', adminAuth, (req, res) => {
 })
 
 // ============================================================
+//  ADMIN: admin accounts
+// ============================================================
+app.get('/api/admin/admins', adminAuth, (_req, res) => {
+  res.json(db.prepare('SELECT id, email FROM users ORDER BY id ASC').all())
+})
+
+app.post('/api/admin/admins', adminAuth, (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase()
+  const password = String(req.body?.password || '')
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'بريد إلكتروني غير صحيح' })
+  if (password.length < 8) return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' })
+  if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) return res.status(409).json({ error: 'هذا البريد مسجّل مسبقاً' })
+  const info = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)').run(email, bcrypt.hashSync(password, 10))
+  res.status(201).json({ id: info.lastInsertRowid, email })
+})
+
+app.delete('/api/admin/admins/:id', adminAuth, (req, res) => {
+  const id = Number(req.params.id)
+  if (id === req.admin.id) return res.status(400).json({ error: 'لا يمكنك حذف حسابك الحالي' })
+  if (db.prepare('SELECT COUNT(*) AS c FROM users').get().c <= 1) return res.status(400).json({ error: 'يجب الإبقاء على حساب مسؤول واحد على الأقل' })
+  db.prepare('DELETE FROM users WHERE id = ?').run(id)
+  res.json({ ok: true })
+})
+
+// ============================================================
 //  ADMIN: WhatsApp message templates
 // ============================================================
 app.get('/api/admin/templates', adminAuth, (_req, res) => {

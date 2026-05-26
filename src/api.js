@@ -116,6 +116,12 @@ export const adminSetCategoryProfile = (fd) =>
 export const adminDeleteCategoryProfile = (cat) =>
   req(`/api/admin/category-profiles/${encodeURIComponent(cat)}`, { method: 'DELETE', headers: adminH() })
 
+// ---- admin: admin accounts ----
+export const adminListAdmins = () => req('/api/admin/admins', { headers: adminH() })
+export const adminCreateAdmin = (email, password) =>
+  req('/api/admin/admins', { method: 'POST', headers: { 'Content-Type': 'application/json', ...adminH() }, body: JSON.stringify({ email, password }) })
+export const adminDeleteAdmin = (id) => req(`/api/admin/admins/${id}`, { method: 'DELETE', headers: adminH() })
+
 // ---- admin: templates ----
 export const adminTemplates = () => req('/api/admin/templates', { headers: adminH() })
 export const adminCreateTemplate = (title, body) =>

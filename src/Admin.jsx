@@ -38,6 +38,9 @@ import {
   adminAssignUser,
   adminUnassignUser,
   adminStats,
+  adminListAdmins,
+  adminCreateAdmin,
+  adminDeleteAdmin,
   listCompanies,
 } from './api.js'
 import { STATUS, StatusBadge } from './shared.jsx'
@@ -607,6 +610,9 @@ function Settings({ onError }) {
   const [cats, setCats] = useState([])
   const [catName, setCatName] = useState('')
   const [catFile, setCatFile] = useState(null)
+  const [admins, setAdmins] = useState([])
+  const [adminEmail, setAdminEmail] = useState('')
+  const [adminPass, setAdminPass] = useState('')
 
   function load() {
     adminGetSettings().then((s) => {
@@ -617,8 +623,23 @@ function Settings({ onError }) {
       setDefaultProfile(s.default_profile_file || '')
     }).catch((e) => onError(e.message))
     adminCategoryProfiles().then(setCats).catch((e) => onError(e.message))
+    adminListAdmins().then(setAdmins).catch((e) => onError(e.message))
   }
   useEffect(load, [])
+
+  async function addAdmin(e) {
+    e.preventDefault()
+    try {
+      await adminCreateAdmin(adminEmail.trim(), adminPass)
+      setAdminEmail(''); setAdminPass('')
+      adminListAdmins().then(setAdmins)
+      flash()
+    } catch (err) { onError(err.message) }
+  }
+  async function delAdmin(a) {
+    if (!window.confirm(`حذف حساب المسؤول «${a.email}»؟`)) return
+    try { await adminDeleteAdmin(a.id); adminListAdmins().then(setAdmins) } catch (e) { onError(e.message) }
+  }
 
   function flash() { setSavedMsg('تم الحفظ ✓'); setTimeout(() => setSavedMsg(''), 1800) }
   async function saveIntro(e) {
@@ -708,6 +729,27 @@ function Settings({ onError }) {
                 <div className="row-sub"><a href={c.profile_file} target="_blank" rel="noreferrer">الملف ↗</a></div>
               </div>
               <div className="row-actions"><button className="btn danger" onClick={() => delCat(c.category)}>حذف</button></div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="admin-head" style={{ marginTop: 24 }}><h2>حسابات المسؤولين ({admins.length})</h2></div>
+      <form className="rows" style={{ padding: 16, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }} onSubmit={addAdmin}>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>أنشئ حساب مسؤول جديد للدخول إلى لوحة التحكم. كلمة المرور 8 أحرف على الأقل.</p>
+        <input type="email" dir="ltr" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@example.com" required style={inputStyle} />
+        <input type="password" dir="ltr" value={adminPass} onChange={(e) => setAdminPass(e.target.value)} placeholder="كلمة المرور" required minLength={8} style={inputStyle} />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button className="btn primary">إنشاء حساب مسؤول</button>
+          {savedMsg && <span style={{ color: 'var(--green-3)', fontSize: 14 }}>{savedMsg}</span>}
+        </div>
+      </form>
+      {admins.length > 0 && (
+        <div className="rows">
+          {admins.map((a) => (
+            <div className="row" key={a.id}>
+              <div className="row-main"><strong dir="ltr" style={{ textAlign: 'start' }}>{a.email}</strong></div>
+              <div className="row-actions"><button className="btn danger" onClick={() => delAdmin(a)}>حذف</button></div>
             </div>
           ))}
         </div>
