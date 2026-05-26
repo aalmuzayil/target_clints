@@ -249,8 +249,8 @@ html[dir="rtl"] .switch input:checked + .track .knob { transform: translateX(-18
 /* status badges */
 .badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 .badge-open { background: var(--green-light); color: var(--green-3); }
-.badge-reserved { background: #fff3d6; color: #b07d12; }
-.badge-claimed { background: #fff3d6; color: #b07d12; }
+.badge-reserved { background: #e8eaee; color: #5b6573; }
+.badge-claimed { background: #e8eaee; color: #5b6573; }
 .badge-completed { background: #e8f1fb; color: #1d6fc7; }
 
 .chip-sm { font-size: 11px; padding: 4px 10px; border-radius: 999px; background: #ececee; color: var(--ink-soft); }
@@ -505,7 +505,7 @@ html[dir="rtl"] .switch input:checked + .track .knob { transform: translateX(-18
 
 /* story-screens showcase (Mobbin "Find design patterns" style) */
 .screens-marquee {
-  width: 100%; overflow: hidden; margin: 8px 0 4px; direction: ltr;
+  width: 100%; max-width: 680px; overflow: hidden; margin: 8px auto 4px; direction: ltr;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }
