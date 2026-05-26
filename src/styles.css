@@ -191,6 +191,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 /* attrition badge anchor for grid cards */
 .card-logo-wrap { position: relative; width: 100%; }
 
+/* story-screens strip (below the companies list) */
+.stories-strip { background: #fff; padding: 26px 0 10px; }
 /* clients marquee strip (below the list, no label) */
 .clients-strip { background: #fff; padding: 22px 0 28px; }
 

@@ -1,5 +1,4 @@
 import IconDeck from './IconDeck.jsx'
-import StoryScreens from './StoryScreens.jsx'
 import { useLang } from './i18n.jsx'
 
 // Frame 1334 top: hero (icon deck + heading + subtitle), then the interactive
@@ -12,8 +11,6 @@ export default function HeroIntro({ view = 'all', onAll, onMine }) {
         <IconDeck />
         <h1>{t('heroTitle')}</h1>
         <p>{t('heroSub')}</p>
-
-        <StoryScreens />
 
         <div className="mb-cta">
           <a

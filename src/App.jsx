@@ -16,6 +16,7 @@ import PhoneLogin from './PhoneLogin.jsx'
 import CompanySheet from './CompanySheet.jsx'
 import HeroIntro from './HeroIntro.jsx'
 import LogoMarquee from './LogoMarquee.jsx'
+import StoryScreens from './StoryScreens.jsx'
 import { useLang } from './i18n.jsx'
 
 // fallback "high attrition" threshold; real value comes from admin settings
@@ -274,6 +275,10 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <section className="stories-strip">
+        <StoryScreens />
+      </section>
 
       <section className="clients-strip">
         <LogoMarquee />
