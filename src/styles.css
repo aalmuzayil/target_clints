@@ -173,14 +173,21 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .card-foot { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: auto; }
 
 /* ---------- pagination (Frame 1334) ---------- */
-.pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 20px 0 4px; }
+.pager { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 22px 0 4px; flex-wrap: wrap; }
 .pager-btn {
-  width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: #fff;
-  font-size: 20px; line-height: 1; color: var(--ink); display: grid; place-items: center; transition: 0.15s;
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: #fff;
+  color: var(--ink); display: grid; place-items: center; transition: 0.15s;
 }
-.pager-btn:hover:not(:disabled) { border-color: #cfd2d6; background: #fafafa; transform: translateY(-1px); }
-.pager-btn:disabled { opacity: 0.35; cursor: default; }
-.pager-info { font-size: 14px; font-weight: 700; color: var(--ink); min-width: 58px; text-align: center; }
+.pager-btn:hover:not(:disabled) { border-color: #cfd2d6; background: #fafafa; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(17,19,23,0.08); }
+.pager-btn:disabled { opacity: 0.3; cursor: default; }
+.pager-num {
+  min-width: 40px; height: 40px; padding: 0 6px; border-radius: 12px; border: 1px solid transparent;
+  background: transparent; font-size: 14px; font-weight: 700; color: var(--ink-soft);
+  display: grid; place-items: center; transition: 0.15s;
+}
+.pager-num:hover:not(.active) { background: #f2f3f5; color: var(--ink); }
+.pager-num.active { background: var(--ink); color: #fff; box-shadow: 0 6px 16px rgba(17,19,23,0.20); }
+.pager-gap { min-width: 22px; text-align: center; color: var(--muted); font-weight: 700; letter-spacing: 1px; }
 
 /* ---------- list / grid view-mode toggle ---------- */
 .lh-actions { display: flex; align-items: center; gap: 8px; }

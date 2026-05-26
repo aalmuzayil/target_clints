@@ -25,7 +25,7 @@ const DEFAULT_HIGH_ATTRITION = 20
 const STATUS_RANK = { completed: 0, reserved: 1, claimed: 1, open: 2 }
 
 // entities shown per page
-const PAGE_SIZE = 14
+const PAGE_SIZE = 7
 
 export default function App() {
   const { t, lang } = useLang()
@@ -290,16 +290,29 @@ export default function App() {
               aria-label="previous page"
               onClick={() => { setPage((p) => Math.max(0, p - 1)); document.getElementById('entities')?.scrollIntoView() }}
             >
-              {lang === 'ar' ? '›' : '‹'}
+              <Chevron dir={lang === 'ar' ? 'right' : 'left'} />
             </button>
-            <span className="pager-info">{safePage + 1} / {pageCount}</span>
+            {pageList(safePage + 1, pageCount).map((p, i) =>
+              p === '…' ? (
+                <span key={`gap${i}`} className="pager-gap">…</span>
+              ) : (
+                <button
+                  key={p}
+                  className={'pager-num' + (p === safePage + 1 ? ' active' : '')}
+                  aria-current={p === safePage + 1 ? 'page' : undefined}
+                  onClick={() => { setPage(p - 1); document.getElementById('entities')?.scrollIntoView() }}
+                >
+                  {p}
+                </button>
+              ),
+            )}
             <button
               className="pager-btn"
               disabled={safePage >= pageCount - 1}
               aria-label="next page"
               onClick={() => { setPage((p) => Math.min(pageCount - 1, p + 1)); document.getElementById('entities')?.scrollIntoView() }}
             >
-              {lang === 'ar' ? '‹' : '›'}
+              <Chevron dir={lang === 'ar' ? 'left' : 'right'} />
             </button>
           </div>
         )}
@@ -342,6 +355,30 @@ export default function App() {
         />
       )}
     </div>
+  )
+}
+
+// compact page list with ellipses: always shows first, last, and a window
+// around the current page (1-indexed). e.g. [1, '…', 4, 5, 6, '…', 58]
+function pageList(current, total) {
+  const set = new Set([1, total, current, current - 1, current + 1])
+  const arr = [...set].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b)
+  const out = []
+  let prev = 0
+  for (const p of arr) {
+    if (p - prev > 1) out.push('…')
+    out.push(p)
+    prev = p
+  }
+  return out
+}
+
+function Chevron({ dir }) {
+  const d = dir === 'left' ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6'
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" d={d} />
+    </svg>
   )
 }
 
