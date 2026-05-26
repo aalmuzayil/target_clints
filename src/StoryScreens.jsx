@@ -1,9 +1,10 @@
 // Mobbin "Find design patterns in seconds"-style showcase: a continuous
 // horizontal scroll of success-story phone screens. Pauses on hover.
+const V = '2' // bump to refresh cached story images
 const SCREENS = [
-  { src: '/logos/stories/half-million.png', alt: '½M' },
-  { src: '/logos/stories/center3.png', alt: 'center3' },
-  { src: '/logos/stories/tdf.png', alt: 'Tourism Development Fund' },
+  { src: `/logos/stories/half-million.png?v=${V}`, alt: '½M' },
+  { src: `/logos/stories/center3.png?v=${V}`, alt: 'center3' },
+  { src: `/logos/stories/tdf.png?v=${V}`, alt: 'Tourism Development Fund' },
 ]
 
 export default function StoryScreens() {
