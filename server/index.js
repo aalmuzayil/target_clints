@@ -276,7 +276,10 @@ app.get('/api/companies/categories', (_req, res) => {
 })
 
 app.get('/api/public-settings', (_req, res) => {
-  res.json({ introMessage: getSetting('intro_message', DEFAULT_INTRO) })
+  res.json({
+    introMessage: getSetting('intro_message', DEFAULT_INTRO),
+    highAttritionThreshold: Number(getSetting('high_attrition_threshold', '20')) || 20,
+  })
 })
 
 app.get('/api/companies/:id', (req, res) => {
@@ -412,10 +415,17 @@ app.put('/api/agencies/:id', adminAuth, companyUpload, (req, res) => {
   if (!name) return res.status(400).json({ error: 'الاسم مطلوب' })
   const logo = fileUrl(req.files?.logoFile?.[0]) || (req.body.logo ?? e.logo)
   const profileFile = fileUrl(req.files?.profileFile?.[0]) || (req.body.profile_file ?? e.profile_file)
+  // attrition_rate: empty string clears it (null); otherwise clamp 0–100
+  let attrition = e.attrition_rate
+  if (req.body.attrition_rate !== undefined) {
+    const raw = String(req.body.attrition_rate).trim()
+    attrition = raw === '' ? null : Math.max(0, Math.min(100, Math.round(Number(raw)) || 0))
+  }
   db.prepare(
-    `UPDATE agencies SET name=?, short=?, logo=?, url=?, category=?, profile=?, contact_phone=?, status=?, profile_file=?, type=? WHERE id=?`,
+    `UPDATE agencies SET name=?, name_en=?, short=?, logo=?, url=?, category=?, profile=?, contact_phone=?, status=?, profile_file=?, type=?, attrition_rate=? WHERE id=?`,
   ).run(
     name,
+    req.body.name_en ?? e.name_en,
     req.body.short ?? e.short,
     logo,
     (req.body.url ?? e.url) || '#',
@@ -425,6 +435,7 @@ app.put('/api/agencies/:id', adminAuth, companyUpload, (req, res) => {
     req.body.status ?? e.status,
     profileFile,
     req.body.type ?? e.type,
+    attrition,
     req.params.id,
   )
   res.json(db.prepare('SELECT * FROM agencies WHERE id = ?').get(req.params.id))
@@ -639,12 +650,17 @@ app.get('/api/admin/settings', adminAuth, (_req, res) => {
     default_profile_file: getSetting('default_profile_file', DEFAULT_PROFILE),
     approve_template: getSetting('approve_template', ''),
     activate_template: getSetting('activate_template', ''),
+    high_attrition_threshold: getSetting('high_attrition_threshold', '20'),
   })
 })
 
 app.post('/api/admin/settings', adminAuth, (req, res) => {
   for (const k of ['intro_message', 'approve_template', 'activate_template']) {
     if (typeof req.body?.[k] === 'string') setSetting(k, req.body[k])
+  }
+  if (req.body?.high_attrition_threshold !== undefined) {
+    const n = Math.max(0, Math.min(100, Math.round(Number(req.body.high_attrition_threshold)) || 0))
+    setSetting('high_attrition_threshold', String(n))
   }
   res.json({ ok: true, intro_message: getSetting('intro_message', DEFAULT_INTRO) })
 })

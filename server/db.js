@@ -4,6 +4,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { MINISTRIES, AUTHORITIES, COMPANIES, COMPLETED, RECENT, TARGET_USERS, TARGET_ASSIGNMENTS } from './seed-data.js'
+import { NAME_EN } from './names-en.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -96,6 +97,10 @@ ensureColumn('reservations', 'lead_phone', "lead_phone TEXT NOT NULL DEFAULT ''"
 ensureColumn('phone_users', 'status', "status TEXT NOT NULL DEFAULT 'approved'")
 // type: 'ministry' | 'authority' | 'company'
 ensureColumn('agencies', 'type', "type TEXT NOT NULL DEFAULT 'company'")
+// admin-set "critical attrition rate" (percentage, 0-100; null = not set)
+ensureColumn('agencies', 'attrition_rate', 'attrition_rate INTEGER')
+// English display name (admin-editable); empty = fall back to Arabic name
+ensureColumn('agencies', 'name_en', "name_en TEXT NOT NULL DEFAULT ''")
 ensureColumn('reservations', 'comment', "comment TEXT NOT NULL DEFAULT ''")
 ensureColumn('phone_users', 'nickname', "nickname TEXT NOT NULL DEFAULT ''")
 // migrate legacy 'claimed' status to the 3-status model
@@ -140,6 +145,18 @@ export function seed() {
   }
   setIfMissing('intro_message', DEFAULT_INTRO)
   setIfMissing('default_profile_file', DEFAULT_PROFILE)
+  setIfMissing('high_attrition_threshold', '20')
+
+  // one-time English-name backfill: only fills empty name_en cells, so admin
+  // edits are never overwritten. Bump the flag key to re-run after map changes.
+  const nameEnDone = db.prepare("SELECT value FROM settings WHERE key = 'name_en_backfill_v1'").get()?.value
+  if (nameEnDone !== '1') {
+    const upd = db.prepare("UPDATE agencies SET name_en = ? WHERE name = ? AND COALESCE(name_en, '') = ''")
+    let n = 0
+    for (const [ar, en] of Object.entries(NAME_EN)) n += upd.run(en, ar).changes
+    db.prepare("INSERT INTO settings (key, value) VALUES ('name_en_backfill_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[backfill] name_en set on ${n} entities`)
+  }
   setIfMissing('approve_template', 'مرحباً {name}، تم قبول حجزك لجهة «{company}». سنتواصل معك لإتمام الإجراءات.')
   setIfMissing('activate_template', 'حياك الله {name}، تم تفعيل رقمك في منصة أكثم. يمكنك الآن تسجيل الدخول والاطلاع على قائمتك.')
 

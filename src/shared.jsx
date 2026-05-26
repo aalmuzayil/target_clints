@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
+import { useLang } from './i18n.jsx'
 
 export const STATUS = {
-  open: { label: 'متوفر', cls: 'open' },
-  reserved: { label: 'محجوز', cls: 'reserved' },
-  completed: { label: 'مكتمل', cls: 'completed' },
+  open: { key: 'available', cls: 'open' },
+  reserved: { key: 'reserved', cls: 'reserved' },
+  completed: { key: 'completed', cls: 'completed' },
   // legacy fallback
-  claimed: { label: 'محجوز', cls: 'reserved' },
+  claimed: { key: 'reserved', cls: 'reserved' },
 }
 
 export function StatusBadge({ status }) {
+  const { t } = useLang()
   const s = STATUS[status] || STATUS.open
-  return <span className={`badge badge-${s.cls}`}>{s.label}</span>
+  return <span className={`badge badge-${s.cls}`}>{t(s.key)}</span>
 }
 
 // short display label for entities without a logo: drops the generic

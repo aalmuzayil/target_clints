@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { reserveCompany, submitLead, submitComment, getPhoneToken } from './api.js'
 import { StatusBadge, Deadline, monogram } from './shared.jsx'
+import { useLang } from './i18n.jsx'
 
 const FALLBACK_INTRO =
   'مرحباً، أتواصل معكم عبر منصة أكثم — منصة تحليلات القوى العاملة ودعم القرار بالذكاء الاصطناعي.'
 const DEFAULT_PROFILE = '/aktham-profile.pdf'
 
 export default function CompanySheet({ company, onClose, onNeedLogin, onReserved }) {
+  const { lang } = useLang()
+  const cname = lang === 'en' && company.name_en ? company.name_en : company.name
   const [reservation, setReservation] = useState(null)
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState('')
@@ -43,10 +46,10 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
 
         <div className="sheet-head">
           <div className="sheet-logo">
-            {company.logo ? <img src={company.logo} alt="" /> : <span>{company.short || monogram(company.name)}</span>}
+            {company.logo ? <img src={company.logo} alt="" /> : <span>{company.short || monogram(cname)}</span>}
           </div>
           <div>
-            <h3>{company.name}</h3>
+            <h3>{cname}</h3>
             <div className="sheet-meta">
               <StatusBadge status={company.status} />
               {company.category ? <span className="chip-sm">{company.category}</span> : null}

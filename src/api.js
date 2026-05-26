@@ -33,6 +33,7 @@ const phoneH = () => ({ Authorization: `Bearer ${getPhoneToken()}` })
 // ---- public catalog ----
 export const listCompanies = () => req('/api/companies')
 export const listCategories = () => req('/api/companies/categories')
+export const publicSettings = () => req('/api/public-settings')
 export const getCompany = (id) => req(`/api/companies/${id}`)
 
 // ---- phone auth ----

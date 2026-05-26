@@ -5,6 +5,7 @@ import {
   listCategories,
   myCompanies,
   submitCompany,
+  publicSettings,
   getPhoneNumber,
   getPhoneName,
   getPhoneToken,
@@ -13,8 +14,21 @@ import {
 import { StatusBadge, Deadline, monogram } from './shared.jsx'
 import PhoneLogin from './PhoneLogin.jsx'
 import CompanySheet from './CompanySheet.jsx'
+import HeroIntro from './HeroIntro.jsx'
+import { useLang } from './i18n.jsx'
+
+// fallback "high attrition" threshold; real value comes from admin settings
+const DEFAULT_HIGH_ATTRITION = 20
+
+// list ordering: completed first, then reserved, then available
+const STATUS_RANK = { completed: 0, reserved: 1, claimed: 1, open: 2 }
+
+// entities shown per page
+const PAGE_SIZE = 14
 
 export default function App() {
+  const { t, lang } = useLang()
+  const displayName = (c) => (lang === 'en' && c.name_en ? c.name_en : c.name)
   const [companies, setCompanies] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
@@ -23,6 +37,9 @@ export default function App() {
   const [statusF, setStatusF] = useState('') // '' | open | reserved | completed
   const [cat, setCat] = useState('') // sector, only when typeF === company
   const [view, setView] = useState('all') // all | mine
+  const [highOnly, setHighOnly] = useState(false) // filter: high attrition only
+  const [highThreshold, setHighThreshold] = useState(DEFAULT_HIGH_ATTRITION) // admin-set
+  const [page, setPage] = useState(0) // current page (0-indexed)
   const [phone, setPhone] = useState(getPhoneNumber())
   const [name, setName] = useState(getPhoneName())
   const [showLogin, setShowLogin] = useState(false)
@@ -41,6 +58,11 @@ export default function App() {
       .finally(() => setLoading(false))
   }
   useEffect(loadAll, [])
+  useEffect(() => {
+    publicSettings()
+      .then((s) => { if (s?.highAttritionThreshold) setHighThreshold(Number(s.highAttritionThreshold)) })
+      .catch(() => {})
+  }, [])
 
   function loadMine() {
     if (getPhoneToken()) myCompanies().then(setMine).catch(() => setMine([]))
@@ -57,14 +79,23 @@ export default function App() {
   }, [companies])
   const filtered = useMemo(() => {
     const q = query.trim()
-    return source.filter(
-      (c) =>
-        (!typeF || c.type === typeF) &&
-        (!statusF || c.status === statusF) &&
-        (typeF !== 'company' || !cat || c.category === cat) &&
-        (!q || c.name.includes(q) || (c.short || '').includes(q)),
-    )
-  }, [source, query, typeF, statusF, cat])
+    return source
+      .filter(
+        (c) =>
+          (!typeF || c.type === typeF) &&
+          (!statusF || c.status === statusF) &&
+          (typeF !== 'company' || !cat || c.category === cat) &&
+          (!highOnly || (c.attrition_rate != null && c.attrition_rate !== '' && Number(c.attrition_rate) >= highThreshold)) &&
+          (!q || c.name.includes(q) || (c.short || '').includes(q)),
+      )
+      .sort((a, b) => (STATUS_RANK[a.status] ?? 3) - (STATUS_RANK[b.status] ?? 3))
+  }, [source, query, typeF, statusF, cat, highOnly, highThreshold])
+
+  // pagination: 7 per page; reset to first page whenever the filters change
+  useEffect(() => { setPage(0) }, [query, typeF, statusF, cat, highOnly, view])
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const pageItems = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
 
   function onLogin(p) {
     setPhone(p)
@@ -83,14 +114,9 @@ export default function App() {
     <div className="app">
       <Header phone={phone} name={name} onLogin={() => setShowLogin(true)} onLogout={logout} />
 
-      <section className="hero">
-        <div className="container">
-          <h1>دليل الشركات</h1>
-          <p>تصفّح الشركات المتاحة، واحجز ما يناسبك مباشرة عبر أكثم</p>
-        </div>
-      </section>
+      <HeroIntro />
 
-      <main className="container main">
+      <main className="container main" id="entities">
         {/* search */}
         <div className="searchbar">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
@@ -98,7 +124,7 @@ export default function App() {
           </svg>
           <input
             type="search"
-            placeholder="ابحث عن جهة"
+            placeholder={t('searchPh')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -108,28 +134,10 @@ export default function App() {
         {phone && (
           <div className="view-toggle">
             <button className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>
-              كل الشركات
+              {t('allCompanies')}
             </button>
             <button className={view === 'mine' ? 'active' : ''} onClick={() => setView('mine')}>
-              قائمتي
-            </button>
-          </div>
-        )}
-
-        {/* interactive status counters */}
-        {view === 'all' && (
-          <div className="stats">
-            <button className={statusF === 'completed' ? 'stat completed active' : 'stat completed'} onClick={() => setStatusF(statusF === 'completed' ? '' : 'completed')}>
-              <span className="stat-num">{counts.completed}</span>
-              <span className="stat-label">مكتمل</span>
-            </button>
-            <button className={statusF === 'reserved' ? 'stat reserved active' : 'stat reserved'} onClick={() => setStatusF(statusF === 'reserved' ? '' : 'reserved')}>
-              <span className="stat-num">{counts.reserved}</span>
-              <span className="stat-label">محجوز</span>
-            </button>
-            <button className={statusF === 'open' ? 'stat open active' : 'stat open'} onClick={() => setStatusF(statusF === 'open' ? '' : 'open')}>
-              <span className="stat-num">{counts.open}</span>
-              <span className="stat-label">متوفر</span>
+              {t('myList')}
             </button>
           </div>
         )}
@@ -139,16 +147,16 @@ export default function App() {
           <>
             <div className="chips">
               <button className={!typeF ? 'chip active' : 'chip'} onClick={() => { setTypeF(''); setCat('') }}>
-                الكل
+                {t('all')}
               </button>
               <button className={typeF === 'ministry' ? 'chip active' : 'chip'} onClick={() => { setTypeF('ministry'); setCat('') }}>
-                الوزارات
+                {t('ministries')}
               </button>
               <button className={typeF === 'authority' ? 'chip active' : 'chip'} onClick={() => { setTypeF('authority'); setCat('') }}>
-                الهيئات
+                {t('authorities')}
               </button>
               <button className={typeF === 'company' ? 'chip active' : 'chip'} onClick={() => { setTypeF('company'); setCat('') }}>
-                الشركات
+                {t('companies')}
               </button>
             </div>
 
@@ -156,7 +164,7 @@ export default function App() {
             {typeF === 'company' && categories.length > 0 && (
               <div className="chips chips-sub">
                 <button className={!cat ? 'chip active' : 'chip'} onClick={() => setCat('')}>
-                  كل القطاعات
+                  {t('allSectors')}
                 </button>
                 {categories.map((c) => (
                   <button key={c} className={cat === c ? 'chip active' : 'chip'} onClick={() => setCat(c)}>
@@ -168,32 +176,80 @@ export default function App() {
           </>
         )}
 
+        {view === 'all' && (
+          <div className="attr-bar">
+            <label className="switch">
+              <input type="checkbox" checked={highOnly} onChange={(e) => setHighOnly(e.target.checked)} />
+              <span className="track"><span className="knob" /></span>
+              <span className="switch-label">{t('highToggle', highThreshold)}</span>
+            </label>
+            <p className="attr-def">{t('indexDef', highThreshold)}</p>
+          </div>
+        )}
+
         <div className="list-head">
-          <span className="count">{loading ? 'جارٍ التحميل…' : `${filtered.length} جهة`}</span>
+          <span className="count">{loading ? t('loading') : t('entities', filtered.length)}</span>
           <button className="btn small primary" onClick={() => (getPhoneToken() ? setShowAdd(true) : setShowLogin(true))}>
-            + إضافة جهة
+            {t('addEntity')}
           </button>
         </div>
 
         {loading ? null : filtered.length === 0 ? (
           <div className="empty">
-            {view === 'mine' ? 'لا توجد جهات في قائمتك بعد.' : 'لا توجد نتائج.'}
+            {view === 'mine' ? t('noMine') : t('noResults')}
           </div>
         ) : (
-          <div className="grid">
-            {filtered.map((c) => (
-              <button key={c.id} className="card" onClick={() => setSelected(c)}>
-                <div className="card-logo">
-                  {c.logo ? <img src={c.logo} alt="" loading="lazy" /> : <span>{c.short || monogram(c.name)}</span>}
+          <div className="dir-list">
+            {pageItems.map((c) => (
+              <button key={c.id} className="dir-row" onClick={() => setSelected(c)}>
+                <div className="dir-logo-wrap">
+                  <div className="dir-logo">
+                    {c.logo ? <img src={c.logo} alt="" loading="lazy" /> : <span>{c.short || monogram(displayName(c))}</span>}
+                  </div>
+                  {c.attrition_rate != null && c.attrition_rate !== '' && (
+                    <span className={'dir-mark' + (Number(c.attrition_rate) >= highThreshold ? ' high' : '')}>
+                      {c.attrition_rate}%
+                    </span>
+                  )}
                 </div>
-                <Deadline deadline={c.reserve_deadline} status={c.status} />
-                <h3>{c.name}</h3>
-                <div className="card-foot">
-                  <StatusBadge status={c.status} />
-                  {c.category ? <span className="chip-sm">{c.category}</span> : null}
+                <div className="dir-info">
+                  <strong>{displayName(c)}</strong>
+                  <span className="dir-sub">
+                    {c.attrition_rate != null && c.attrition_rate !== ''
+                      ? t('attrition', c.attrition_rate)
+                      : (c.category || (c.type === 'ministry' ? t('typeMinistry') : c.type === 'authority' ? t('typeAuthority') : t('typeCompany')))}
+                    <Deadline deadline={c.reserve_deadline} status={c.status} />
+                  </span>
+                </div>
+                <div className="dir-action">
+                  {c.status === 'open'
+                    ? <span className="dir-claim">{t('reserve')}</span>
+                    : <StatusBadge status={c.status} />}
                 </div>
               </button>
             ))}
+          </div>
+        )}
+
+        {!loading && pageCount > 1 && (
+          <div className="pager">
+            <button
+              className="pager-btn"
+              disabled={safePage === 0}
+              aria-label="previous page"
+              onClick={() => { setPage((p) => Math.max(0, p - 1)); document.getElementById('entities')?.scrollIntoView() }}
+            >
+              {lang === 'ar' ? '›' : '‹'}
+            </button>
+            <span className="pager-info">{safePage + 1} / {pageCount}</span>
+            <button
+              className="pager-btn"
+              disabled={safePage >= pageCount - 1}
+              aria-label="next page"
+              onClick={() => { setPage((p) => Math.min(pageCount - 1, p + 1)); document.getElementById('entities')?.scrollIntoView() }}
+            >
+              {lang === 'ar' ? '‹' : '›'}
+            </button>
           </div>
         )}
       </main>
@@ -231,22 +287,26 @@ export default function App() {
 }
 
 function Header({ phone, name, onLogin, onLogout }) {
+  const { t, lang, toggle } = useLang()
   return (
     <header className="site-header">
       <div className="container header-inner">
         <a className="brand" href="/">
-          <img className="brand-logo" src="/aktham-logo.svg" alt="أكثم" />
+          <img className="brand-logo" src="/aktham-logo.svg" alt={t('brandAlt')} />
         </a>
-        {phone ? (
-          <div className="account">
-            <span className="acc-phone" dir={name ? 'rtl' : 'ltr'}>{name || phone}</span>
-            <button className="btn ghost small" onClick={onLogout}>خروج</button>
-          </div>
-        ) : (
-          <button className="btn primary small" onClick={onLogin}>
-            تسجيل الدخول
+        <div className="account">
+          <button className="lang-toggle" onClick={toggle} aria-label="Switch language" title="Switch language">
+            {lang === 'ar' ? 'EN' : 'ع'}
           </button>
-        )}
+          {phone ? (
+            <>
+              <span className="acc-phone" dir={name ? 'rtl' : 'ltr'}>{name || phone}</span>
+              <button className="btn ghost small" onClick={onLogout}>{t('signOut')}</button>
+            </>
+          ) : (
+            <button className="btn primary small" onClick={onLogin}>{t('signIn')}</button>
+          )}
+        </div>
       </div>
     </header>
   )
@@ -327,13 +387,14 @@ function AddCompany({ onClose, onDone, onOpenExisting }) {
 }
 
 function Footer() {
+  const { t } = useLang()
   return (
     <footer className="site-footer">
       <div className="container footer-inner">
-        <img className="brand-logo-white" src="/aktham-logo-white.svg" alt="أكثم" />
+        <img className="brand-logo-white" src="/aktham-logo-white.svg" alt={t('brandAlt')} />
         <div className="footer-links">
-          <span>© {new Date().getFullYear()} أكثم — جميع الحقوق محفوظة</span>
-          <Link to="/admin" className="admin-link">لوحة التحكم</Link>
+          <span>{t('rights', new Date().getFullYear())}</span>
+          <Link to="/admin" className="admin-link">{t('adminPanel')}</Link>
         </div>
       </div>
     </footer>

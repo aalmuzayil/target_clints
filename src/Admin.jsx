@@ -269,6 +269,7 @@ function EditModal({ company, onClose, onSaved, onError }) {
     name: company.name || '', short: company.short || '', url: company.url && company.url !== '#' ? company.url : '',
     category: company.category || '', profile: company.profile || '', contact_phone: company.contact_phone || '',
     status: company.status || 'open', type: company.type || 'company',
+    attrition_rate: company.attrition_rate ?? '', name_en: company.name_en || '',
   })
   const TYPES = { ministry: 'وزارة', authority: 'هيئة', company: 'شركة' }
   const [file, setFile] = useState(null)
@@ -314,6 +315,7 @@ function EditModal({ company, onClose, onSaved, onError }) {
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h3>{isNew ? 'إضافة شركة' : 'تعديل شركة'}</h3>
         <label>الاسم *<input value={form.name} onChange={set('name')} required /></label>
+        <label>الاسم بالإنجليزية<input dir="ltr" value={form.name_en} onChange={set('name_en')} placeholder="English name" /></label>
         <label>النوع
           <div className="seg">
             {Object.entries(TYPES).map(([k, v]) => (
@@ -325,6 +327,7 @@ function EditModal({ company, onClose, onSaved, onError }) {
           <label>اسم مختصر<input value={form.short} onChange={set('short')} /></label>
           <label>{form.type === 'company' ? 'القطاع' : 'التصنيف'}<input value={form.category} onChange={set('category')} /></label>
         </div>
+        <label>معدل التسرب الحرج % (اختياري)<input type="number" min="0" max="100" value={form.attrition_rate} onChange={set('attrition_rate')} placeholder="مثال: 13" /></label>
         <label>رابط الموقع<input value={form.url} onChange={set('url')} placeholder="https://" /></label>
         <label>رقم التواصل (واتساب)<input dir="ltr" value={form.contact_phone} onChange={set('contact_phone')} placeholder="9665XXXXXXXX" /></label>
         <label>نبذة عن الشركة<textarea value={form.profile} onChange={set('profile')} /></label>
@@ -598,6 +601,7 @@ function Settings({ onError }) {
   const [intro, setIntro] = useState('')
   const [approveTpl, setApproveTpl] = useState('')
   const [activateTpl, setActivateTpl] = useState('')
+  const [threshold, setThreshold] = useState('20')
   const [defaultProfile, setDefaultProfile] = useState('')
   const [savedMsg, setSavedMsg] = useState('')
   const [cats, setCats] = useState([])
@@ -609,6 +613,7 @@ function Settings({ onError }) {
       setIntro(s.intro_message || '')
       setApproveTpl(s.approve_template || '')
       setActivateTpl(s.activate_template || '')
+      setThreshold(String(s.high_attrition_threshold ?? '20'))
       setDefaultProfile(s.default_profile_file || '')
     }).catch((e) => onError(e.message))
     adminCategoryProfiles().then(setCats).catch((e) => onError(e.message))
@@ -623,6 +628,10 @@ function Settings({ onError }) {
   async function saveTemplates(e) {
     e.preventDefault()
     try { await adminSaveSettings({ approve_template: approveTpl, activate_template: activateTpl }); flash() } catch (err) { onError(err.message) }
+  }
+  async function saveThreshold(e) {
+    e.preventDefault()
+    try { await adminSaveSettings({ high_attrition_threshold: threshold }); flash() } catch (err) { onError(err.message) }
   }
   async function uploadDefault(file) {
     if (!file) return
@@ -645,6 +654,18 @@ function Settings({ onError }) {
         <textarea value={intro} onChange={(e) => setIntro(e.target.value)} style={{ ...inputStyle, minHeight: 110, resize: 'vertical' }} />
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button className="btn primary">حفظ الرسالة</button>
+          {savedMsg && <span style={{ color: 'var(--green-3)', fontSize: 14 }}>{savedMsg}</span>}
+        </div>
+      </form>
+
+      <div className="admin-head"><h2>حد التسرب الحرج</h2></div>
+      <form className="rows" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }} onSubmit={saveThreshold}>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>النسبة التي تُعتبر عندها الجهة «مرتفعة التسرّب» (يُستخدم في الفلتر والشارة). الافتراضي 20%.</p>
+        <label style={{ fontSize: 14, color: 'var(--muted)' }}>الحد (%)
+          <input type="number" min="0" max="100" value={threshold} onChange={(e) => setThreshold(e.target.value)} style={{ ...inputStyle, maxWidth: 140 }} />
+        </label>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button className="btn primary">حفظ الحد</button>
           {savedMsg && <span style={{ color: 'var(--green-3)', fontSize: 14 }}>{savedMsg}</span>}
         </div>
       </form>
