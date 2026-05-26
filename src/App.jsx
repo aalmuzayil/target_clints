@@ -114,7 +114,11 @@ export default function App() {
     <div className="app">
       <Header phone={phone} name={name} onLogin={() => setShowLogin(true)} onLogout={logout} />
 
-      <HeroIntro />
+      <HeroIntro
+        view={view}
+        onAll={() => setView('all')}
+        onMine={() => (getPhoneToken() ? setView('mine') : setShowLogin(true))}
+      />
 
       <main className="container main" id="entities">
         {/* search */}
@@ -129,18 +133,6 @@ export default function App() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-
-        {/* view toggle */}
-        {phone && (
-          <div className="view-toggle">
-            <button className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>
-              {t('allCompanies')}
-            </button>
-            <button className={view === 'mine' ? 'active' : ''} onClick={() => setView('mine')}>
-              {t('myList')}
-            </button>
-          </div>
-        )}
 
         {/* type chips: ministries / authorities / companies */}
         {view === 'all' && (

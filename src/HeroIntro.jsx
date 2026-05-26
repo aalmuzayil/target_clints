@@ -4,7 +4,7 @@ import { useLang } from './i18n.jsx'
 
 // Frame 1334 top: hero (icon deck + heading + subtitle), then the interactive
 // "Trusted by teams at" marquee, then the CTAs. Follows active language / direction.
-export default function HeroIntro() {
+export default function HeroIntro({ view = 'all', onAll, onMine }) {
   const { t, dir } = useLang()
   return (
     <div className="mb mb-embed" dir={dir} style={{ textAlign: 'center' }}>
@@ -19,10 +19,18 @@ export default function HeroIntro() {
         </div>
 
         <div className="mb-cta">
-          <a href="#entities" className="mb-btn mb-btn-dark">
+          <a
+            href="#entities"
+            className={'mb-btn ' + (view === 'all' ? 'mb-btn-dark' : 'mb-btn-ghost')}
+            onClick={() => onAll?.()}
+          >
             <span>{t('allCompanies')}</span>
           </a>
-          <a href="#entities" className="mb-btn mb-btn-ghost">
+          <a
+            href="#entities"
+            className={'mb-btn ' + (view === 'mine' ? 'mb-btn-dark' : 'mb-btn-ghost')}
+            onClick={() => onMine?.()}
+          >
             <span>{t('myList')}</span>
           </a>
         </div>
