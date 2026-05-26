@@ -85,7 +85,7 @@ export default function App() {
           (!typeF || c.type === typeF) &&
           (!statusF || c.status === statusF) &&
           (typeF !== 'company' || !cat || c.category === cat) &&
-          (!highOnly || (c.attrition_rate != null && c.attrition_rate !== '' && Number(c.attrition_rate) >= highThreshold)) &&
+          (!highOnly || (c.profile || '').includes('أبرز التحديات')) &&
           (!q || c.name.includes(q) || (c.short || '').includes(q)),
       )
       .sort((a, b) => (STATUS_RANK[a.status] ?? 3) - (STATUS_RANK[b.status] ?? 3))
