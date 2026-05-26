@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   listCompanies,
-  listCategories,
   myCompanies,
   submitCompany,
   publicSettings,
@@ -31,13 +30,17 @@ const PAGE_SIZE = 14
 export default function App() {
   const { t, lang } = useLang()
   const displayName = (c) => (lang === 'en' && c.name_en ? c.name_en : c.name)
+  const typeLabel = (type) =>
+    type === 'ministry' ? t('typeMinistry')
+      : type === 'authority' ? t('typeAuthority')
+        : type === 'semi' ? t('typeSemi')
+          : t('typeCompany')
   const [companies, setCompanies] = useState([])
-  const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
-  const [typeF, setTypeF] = useState('') // '' | ministry | authority | company
+  const [tierF, setTierF] = useState('') // '' | gov | semi | company
   const [statusF, setStatusF] = useState('') // '' | open | reserved | completed
-  const [cat, setCat] = useState('') // sector, only when typeF === company
+  const [sub, setSub] = useState('') // gov: ministry|authority ; semi/company: category
   const [view, setView] = useState('all') // all | mine
   const [highOnly, setHighOnly] = useState(false) // filter: high attrition only
   const [highThreshold, setHighThreshold] = useState(DEFAULT_HIGH_ATTRITION) // admin-set
@@ -52,11 +55,8 @@ export default function App() {
 
   function loadAll() {
     setLoading(true)
-    Promise.all([listCompanies(), listCategories()])
-      .then(([c, cats]) => {
-        setCompanies(c)
-        setCategories(cats)
-      })
+    listCompanies()
+      .then(setCompanies)
       .catch(() => {})
       .finally(() => setLoading(false))
   }
@@ -75,27 +75,41 @@ export default function App() {
   }, [view, phone])
 
   const source = view === 'mine' ? mine : companies
-  const counts = useMemo(() => {
-    const c = { open: 0, reserved: 0, completed: 0 }
-    companies.forEach((x) => { if (c[x.status] != null) c[x.status]++ })
-    return c
-  }, [companies])
+  // sub-filter option lists, derived from loaded data
+  const sectors = useMemo(
+    () => [...new Set(companies.filter((c) => c.type === 'company').map((c) => c.category).filter(Boolean))].sort(),
+    [companies],
+  )
+  const affiliations = useMemo(
+    () => [...new Set(companies.filter((c) => c.type === 'semi').map((c) => c.category).filter(Boolean))].sort(),
+    [companies],
+  )
   const filtered = useMemo(() => {
     const q = query.trim()
+    const inTier = (c) =>
+      !tierF ||
+      (tierF === 'gov' && (c.type === 'ministry' || c.type === 'authority')) ||
+      (tierF === 'semi' && c.type === 'semi') ||
+      (tierF === 'company' && c.type === 'company')
+    const inSub = (c) => {
+      if (!sub) return true
+      if (tierF === 'gov') return c.type === sub
+      return c.category === sub // semi affiliation or company sector
+    }
     return source
       .filter(
         (c) =>
-          (!typeF || c.type === typeF) &&
+          inTier(c) &&
+          inSub(c) &&
           (!statusF || c.status === statusF) &&
-          (typeF !== 'company' || !cat || c.category === cat) &&
           (!highOnly || (c.profile || '').includes('أبرز التحديات')) &&
           (!q || c.name.includes(q) || (c.short || '').includes(q)),
       )
       .sort((a, b) => (STATUS_RANK[a.status] ?? 3) - (STATUS_RANK[b.status] ?? 3))
-  }, [source, query, typeF, statusF, cat, highOnly, highThreshold])
+  }, [source, query, tierF, sub, statusF, highOnly])
 
-  // pagination: 7 per page; reset to first page whenever the filters change
-  useEffect(() => { setPage(0) }, [query, typeF, statusF, cat, highOnly, view])
+  // pagination: reset to first page whenever the filters change
+  useEffect(() => { setPage(0) }, [query, tierF, sub, statusF, highOnly, view])
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount - 1)
   const pageItems = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
@@ -137,34 +151,49 @@ export default function App() {
           />
         </div>
 
-        {/* type chips: ministries / authorities / companies */}
+        {/* tier chips: government / semi-government / companies */}
         {view === 'all' && (
           <>
             <div className="chips">
-              <button className={!typeF ? 'chip active' : 'chip'} onClick={() => { setTypeF(''); setCat('') }}>
+              <button className={!tierF ? 'chip active' : 'chip'} onClick={() => { setTierF(''); setSub('') }}>
                 {t('all')}
               </button>
-              <button className={typeF === 'ministry' ? 'chip active' : 'chip'} onClick={() => { setTypeF('ministry'); setCat('') }}>
-                {t('ministries')}
+              <button className={tierF === 'gov' ? 'chip active' : 'chip'} onClick={() => { setTierF('gov'); setSub('') }}>
+                {t('government')}
               </button>
-              <button className={typeF === 'authority' ? 'chip active' : 'chip'} onClick={() => { setTypeF('authority'); setCat('') }}>
-                {t('authorities')}
+              <button className={tierF === 'semi' ? 'chip active' : 'chip'} onClick={() => { setTierF('semi'); setSub('') }}>
+                {t('semiGov')}
               </button>
-              <button className={typeF === 'company' ? 'chip active' : 'chip'} onClick={() => { setTypeF('company'); setCat('') }}>
+              <button className={tierF === 'company' ? 'chip active' : 'chip'} onClick={() => { setTierF('company'); setSub('') }}>
                 {t('companies')}
               </button>
             </div>
 
-            {/* sector sub-filter, shown only for companies */}
-            {typeF === 'company' && categories.length > 0 && (
+            {/* government sub-filter: ministries / authorities */}
+            {tierF === 'gov' && (
               <div className="chips chips-sub">
-                <button className={!cat ? 'chip active' : 'chip'} onClick={() => setCat('')}>
-                  {t('allSectors')}
-                </button>
-                {categories.map((c) => (
-                  <button key={c} className={cat === c ? 'chip active' : 'chip'} onClick={() => setCat(c)}>
-                    {c}
-                  </button>
+                <button className={!sub ? 'chip active' : 'chip'} onClick={() => setSub('')}>{t('all')}</button>
+                <button className={sub === 'ministry' ? 'chip active' : 'chip'} onClick={() => setSub('ministry')}>{t('ministries')}</button>
+                <button className={sub === 'authority' ? 'chip active' : 'chip'} onClick={() => setSub('authority')}>{t('authorities')}</button>
+              </div>
+            )}
+
+            {/* semi-government sub-filter: affiliation */}
+            {tierF === 'semi' && affiliations.length > 0 && (
+              <div className="chips chips-sub">
+                <button className={!sub ? 'chip active' : 'chip'} onClick={() => setSub('')}>{t('allAffiliations')}</button>
+                {affiliations.map((a) => (
+                  <button key={a} className={sub === a ? 'chip active' : 'chip'} onClick={() => setSub(a)}>{a}</button>
+                ))}
+              </div>
+            )}
+
+            {/* company sub-filter: sector */}
+            {tierF === 'company' && sectors.length > 0 && (
+              <div className="chips chips-sub">
+                <button className={!sub ? 'chip active' : 'chip'} onClick={() => setSub('')}>{t('allSectors')}</button>
+                {sectors.map((c) => (
+                  <button key={c} className={sub === c ? 'chip active' : 'chip'} onClick={() => setSub(c)}>{c}</button>
                 ))}
               </div>
             )}
@@ -238,8 +267,8 @@ export default function App() {
                   <strong>{displayName(c)}</strong>
                   <span className="dir-sub">
                     {c.attrition_rate != null && c.attrition_rate !== ''
-                      ? t('attrition', c.attrition_rate)
-                      : (c.category || (c.type === 'ministry' ? t('typeMinistry') : c.type === 'authority' ? t('typeAuthority') : t('typeCompany')))}
+                      ? <span className="attr-label">{t('attrition', c.attrition_rate)}</span>
+                      : (c.category || typeLabel(c.type))}
                     <Deadline deadline={c.reserve_deadline} status={c.status} />
                   </span>
                 </div>

@@ -9,6 +9,7 @@ import { BRIEFS } from './briefs.js'
 import { ATTRITION } from './attrition.js'
 import { PROSPECTS } from './prospects.js'
 import { TADAWUL } from './tadawul.js'
+import { SEMIGOV } from './semigov.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -331,5 +332,17 @@ export function seed() {
       .run()
     db.prepare("INSERT INTO settings (key, value) VALUES ('briefs_label_fix_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[fix] brief label cleaned on ${r.changes} entities`)
+  }
+
+  // one-time semi-government classification: reclassify the mapped entities from
+  // 'company' to 'semi' and store their affiliation in `category` (used as the
+  // sub-filter for the شبه حكومي tier). Runs after all imports so every entity exists.
+  const semiDone = db.prepare("SELECT value FROM settings WHERE key = 'semigov_backfill_v1'").get()?.value
+  if (semiDone !== '1') {
+    const upd = db.prepare("UPDATE agencies SET type = 'semi', category = ? WHERE name = ?")
+    let n = 0
+    for (const [name, affiliation] of Object.entries(SEMIGOV)) n += upd.run(affiliation, name).changes
+    db.prepare("INSERT INTO settings (key, value) VALUES ('semigov_backfill_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[backfill] semi-government classification set on ${n} entities`)
   }
 }
