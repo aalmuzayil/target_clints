@@ -29,7 +29,7 @@ export function monogram(name) {
 }
 
 export function fmtRemaining(ms) {
-  if (ms <= 0) return 'انتهى الوقت'
+  if (ms <= 0) return ''
   const d = Math.floor(ms / 86400000)
   const h = Math.floor((ms % 86400000) / 3600000)
   const m = Math.floor((ms % 3600000) / 60000)
@@ -47,8 +47,10 @@ export function Deadline({ deadline, status }) {
   }, [])
   if (!deadline || (status !== 'reserved' && status !== 'open')) return null
   const remaining = deadline - Date.now()
+  // expired countdowns are hidden — the admin can release the hold from the dashboard
+  if (remaining <= 0) return null
   return (
-    <div className={`deadline ${remaining <= 0 ? 'expired' : ''}`}>
+    <div className="deadline">
       <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden>
         <path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 11h-4v-2h2V7h2z" />
       </svg>

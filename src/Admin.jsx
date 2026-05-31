@@ -217,7 +217,7 @@ function Overview({ onError }) {
               <tbody>
                 {s.reservedList.map((r) => {
                   const remainingMs = r.reserve_deadline ? r.reserve_deadline - Date.now() : null
-                  const remaining = remainingMs == null ? '—' : remainingMs <= 0 ? t('a_expired') : fmtRemaining(remainingMs)
+                  const remaining = remainingMs == null || remainingMs <= 0 ? '—' : fmtRemaining(remainingMs)
                   const endDate = r.reserve_deadline ? new Date(r.reserve_deadline).toLocaleDateString(lang === 'en' ? 'en' : 'ar') : '—'
                   return (
                     <tr key={r.id}>

@@ -358,4 +358,15 @@ export function seed() {
     db.prepare("INSERT INTO settings (key, value) VALUES ('semigov_backfill_v2', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[backfill] semi-government classification set on ${n} entities`)
   }
+
+  // one-time deadline reset: extend every currently-reserved entity's hold to
+  // 14 days from now, so existing reservations (created under the old 48h
+  // default) don't appear expired.
+  const dlDone = db.prepare("SELECT value FROM settings WHERE key = 'reset_deadlines_14d_v1'").get()?.value
+  if (dlDone !== '1') {
+    const newDeadline = Date.now() + 14 * 24 * 60 * 60 * 1000
+    const r = db.prepare("UPDATE agencies SET reserve_deadline = ? WHERE status = 'reserved'").run(newDeadline)
+    db.prepare("INSERT INTO settings (key, value) VALUES ('reset_deadlines_14d_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[backfill] extended ${r.changes} reservation deadlines to 14 days`)
+  }
 }
