@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { reserveCompany, cancelReservation, similarCompanies, submitLead, submitComment, getPhoneToken, getPhoneNumber } from './api.js'
 import { StatusBadge, Deadline, monogram } from './shared.jsx'
 import { useLang } from './i18n.jsx'
+import CommissionCalc from './CommissionCalc.jsx'
 
 const FALLBACK_INTRO =
   'مرحباً، أتواصل معكم عبر منصة أكثم — منصة تحليلات القوى العاملة ودعم القرار بالذكاء الاصطناعي.'
@@ -77,6 +78,8 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
         </div>
 
         {company.profile ? <Challenges profile={company.profile} /> : null}
+
+        <CommissionCalc company={company} />
 
         {company.url && company.url !== '#' ? (
           <a className="site-link" href={company.url} target="_blank" rel="noreferrer">
