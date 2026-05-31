@@ -351,12 +351,12 @@ export function seed() {
   // one-time semi-government classification: reclassify the mapped entities from
   // 'company' to 'semi' and store their affiliation in `category` (used as the
   // sub-filter for the شبه حكومي tier). Runs after all imports so every entity exists.
-  const semiDone = db.prepare("SELECT value FROM settings WHERE key = 'semigov_backfill_v2'").get()?.value
+  const semiDone = db.prepare("SELECT value FROM settings WHERE key = 'semigov_backfill_v3'").get()?.value
   if (semiDone !== '1') {
     const upd = db.prepare("UPDATE agencies SET type = 'semi', category = ? WHERE name = ?")
     let n = 0
     for (const [name, affiliation] of Object.entries(SEMIGOV)) n += upd.run(affiliation, name).changes
-    db.prepare("INSERT INTO settings (key, value) VALUES ('semigov_backfill_v2', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    db.prepare("INSERT INTO settings (key, value) VALUES ('semigov_backfill_v3', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[backfill] semi-government classification set on ${n} entities`)
   }
 
@@ -373,7 +373,7 @@ export function seed() {
 
   // one-time PIF additions: insert the curated PIF subsidiaries that aren't
   // in the directory yet. Skips any name that already exists.
-  const pifAddDone = db.prepare("SELECT value FROM settings WHERE key = 'pif_additions_v1'").get()?.value
+  const pifAddDone = db.prepare("SELECT value FROM settings WHERE key = 'pif_additions_v2'").get()?.value
   if (pifAddDone !== '1') {
     const exists = db.prepare('SELECT 1 FROM agencies WHERE name = ?')
     const ins = db.prepare(
@@ -387,7 +387,7 @@ export function seed() {
       ins.run(p.name, p.name_en || '', ++ord, p.brief || '')
       n++
     }
-    db.prepare("INSERT INTO settings (key, value) VALUES ('pif_additions_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    db.prepare("INSERT INTO settings (key, value) VALUES ('pif_additions_v2', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[seed] PIF additions inserted: ${n}`)
   }
 
