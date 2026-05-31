@@ -24,11 +24,21 @@ function tierFor(emp) {
   return TIERS.find((t) => emp >= t.min && emp <= t.max) || TIERS[0]
 }
 
-function estimateCommission(emp, solution) {
+// experience-based touch per sector: government deals lean on-premise with a
+// premium for regulatory/training overhead, semi-government leans cloud at
+// baseline, and private deals are price-sensitive (light trim).
+const SECTOR_PROFILE = {
+  gov:     { deployment: 'onprem', factor: 1.10 },
+  semi:    { deployment: 'cloud',  factor: 1.00 },
+  private: { deployment: 'cloud',  factor: 0.90 },
+}
+
+function estimateCommission(emp, sector) {
   const tier = tierFor(emp)
+  const profile = SECTOR_PROFILE[sector] || SECTOR_PROFILE.private
   const annual = emp * tier.monthly * 12
-  const initial = solution === 'onprem' ? tier.onprem : tier.cloud
-  const total = annual + initial
+  const initial = profile.deployment === 'onprem' ? tier.onprem : tier.cloud
+  const total = (annual + initial) * profile.factor
   // round to nearest 5k for a clean display
   return Math.round((total * COMMISSION_RATE) / 5000) * 5000
 }
@@ -58,17 +68,24 @@ function defaultEmployees(company) {
   return BIG_NAMES.some((n) => name.includes(n)) ? 3000 : 500
 }
 
+function sectorFor(company) {
+  if (!company) return 'private'
+  if (company.type === 'ministry' || company.type === 'authority') return 'gov'
+  if (company.type === 'semi') return 'semi'
+  return 'private'
+}
+
 export default function CommissionCalc({ company }) {
   const { t, lang } = useLang()
-  const [solution, setSolution] = useState('cloud') // 'cloud' | 'onprem'
+  const [sector, setSector] = useState(() => sectorFor(company))
   const [emp, setEmp] = useState(() => defaultEmployees(company))
   // reset to smart defaults whenever the open entity changes
   useEffect(() => {
-    setSolution('cloud')
+    setSector(sectorFor(company))
     setEmp(defaultEmployees(company))
   }, [company?.id])
 
-  const target = useMemo(() => estimateCommission(emp, solution), [emp, solution])
+  const target = useMemo(() => estimateCommission(emp, sector), [emp, sector])
   const display = useAnimatedNumber(target)
 
   const fmt = (n) =>
@@ -80,25 +97,14 @@ export default function CommissionCalc({ company }) {
       <h4>{t('calcTitle')}</h4>
       <p className="calc-sub">{t('calcSub')}</p>
 
-      <div className="calc-field">
-        <span className="calc-label">{t('calcSolution')}</span>
-        <div className="calc-toggle" role="group">
-          <button
-            type="button"
-            className={solution === 'cloud' ? 'on' : ''}
-            onClick={() => setSolution('cloud')}
-          >
-            {t('calcCloud')}
-          </button>
-          <button
-            type="button"
-            className={solution === 'onprem' ? 'on' : ''}
-            onClick={() => setSolution('onprem')}
-          >
-            {t('calcOnPrem')}
-          </button>
-        </div>
-      </div>
+      <label className="calc-field">
+        <span className="calc-label">{t('calcSector')}</span>
+        <select className="calc-select" value={sector} onChange={(e) => setSector(e.target.value)}>
+          <option value="gov">{t('calcGov')}</option>
+          <option value="semi">{t('calcSemi')}</option>
+          <option value="private">{t('calcPrivate')}</option>
+        </select>
+      </label>
 
       <label className="calc-field">
         <span className="calc-label">
