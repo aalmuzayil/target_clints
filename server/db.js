@@ -11,6 +11,7 @@ import { PROSPECTS } from './prospects.js'
 import { TADAWUL } from './tadawul.js'
 import { SEMIGOV } from './semigov.js'
 import { PIF_ADDITIONS } from './pif-additions.js'
+import { EMPLOYEES } from './employees.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -120,6 +121,8 @@ ensureColumn('agencies', 'type', "type TEXT NOT NULL DEFAULT 'company'")
 ensureColumn('agencies', 'attrition_rate', 'attrition_rate INTEGER')
 // English display name (admin-editable); empty = fall back to Arabic name
 ensureColumn('agencies', 'name_en', "name_en TEXT NOT NULL DEFAULT ''")
+// approximate Saudi Arabia employee count (from LinkedIn data); null = unknown
+ensureColumn('agencies', 'employees', 'employees INTEGER')
 ensureColumn('reservations', 'comment', "comment TEXT NOT NULL DEFAULT ''")
 ensureColumn('phone_users', 'nickname', "nickname TEXT NOT NULL DEFAULT ''")
 // migrate legacy 'claimed' status to the 3-status model
@@ -389,6 +392,17 @@ export function seed() {
     }
     db.prepare("INSERT INTO settings (key, value) VALUES ('pif_additions_v2', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[seed] PIF additions inserted: ${n}`)
+  }
+
+  // one-time employee-count backfill from LinkedIn data: only sets it where
+  // unset, so admin edits are preserved.
+  const empDone = db.prepare("SELECT value FROM settings WHERE key = 'employees_backfill_v1'").get()?.value
+  if (empDone !== '1') {
+    const upd = db.prepare('UPDATE agencies SET employees = ? WHERE name = ? AND employees IS NULL')
+    let n = 0
+    for (const [name, count] of Object.entries(EMPLOYEES)) n += upd.run(count, name).changes
+    db.prepare("INSERT INTO settings (key, value) VALUES ('employees_backfill_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[backfill] employee counts set on ${n} entities`)
   }
 
   // one-time wipe for a specific phone (admin-requested cleanup): release any

@@ -47,6 +47,10 @@ const BIG_NAMES = [
 ]
 function defaultEmployees(company) {
   if (!company) return 1000
+  // prefer authoritative LinkedIn-sourced count when we have it
+  if (company.employees && company.employees > 0) {
+    return Math.max(100, Math.min(5000, company.employees))
+  }
   if (company.type === 'ministry') return 5000
   if (company.type === 'authority') return 2000
   const name = company.name || ''
