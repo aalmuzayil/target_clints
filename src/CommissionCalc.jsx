@@ -36,12 +36,35 @@ function sectorFor(company) {
   return 'private'
 }
 
+// approximate the entity's expected size as a nicely rounded slider default.
+// Bigger headcount for ministries and PIF-flagship semi-government entities;
+// smaller for private/Tadawul defaults. Both fields stay editable.
+const BIG_NAMES = [
+  'stc', 'سابك', 'معادن', 'أرامكو', 'نيوم', 'روشن', 'SEC', 'الكهرباء',
+  'SNB', 'الأهلي', 'الرياض', 'الإنماء', 'أكوا باور', 'البحري', 'SAMI',
+  'العقارية', 'السعودية للكهرباء', 'الراجحي', 'الإسكان الوطنية', 'NHC',
+  'علم', 'هيومين', 'مرافق',
+]
+function defaultEmployees(company) {
+  if (!company) return 1000
+  if (company.type === 'ministry') return 5000
+  if (company.type === 'authority') return 2000
+  const name = company.name || ''
+  if (company.type === 'semi') {
+    return BIG_NAMES.some((n) => name.includes(n)) ? 5000 : 1500
+  }
+  return BIG_NAMES.some((n) => name.includes(n)) ? 3000 : 500
+}
+
 export default function CommissionCalc({ company }) {
   const { t, lang } = useLang()
   const [sector, setSector] = useState(() => sectorFor(company))
-  const [emp, setEmp] = useState(1000)
-  // reset when the open entity changes
-  useEffect(() => { setSector(sectorFor(company)); setEmp(1000) }, [company?.id])
+  const [emp, setEmp] = useState(() => defaultEmployees(company))
+  // reset to smart defaults whenever the open entity changes
+  useEffect(() => {
+    setSector(sectorFor(company))
+    setEmp(defaultEmployees(company))
+  }, [company?.id])
 
   const target = useMemo(() => estimateCommission(emp, sector), [emp, sector])
   const display = useAnimatedNumber(target)
