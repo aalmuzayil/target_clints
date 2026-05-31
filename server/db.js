@@ -396,12 +396,13 @@ export function seed() {
 
   // one-time employee-count backfill from LinkedIn data: only sets it where
   // unset, so admin edits are preserved.
-  const empDone = db.prepare("SELECT value FROM settings WHERE key = 'employees_backfill_v1'").get()?.value
+  const empDone = db.prepare("SELECT value FROM settings WHERE key = 'employees_backfill_v2'").get()?.value
   if (empDone !== '1') {
-    const upd = db.prepare('UPDATE agencies SET employees = ? WHERE name = ? AND employees IS NULL')
+    // overwrite mapped entries so previously-capped values get the real count
+    const upd = db.prepare('UPDATE agencies SET employees = ? WHERE name = ?')
     let n = 0
     for (const [name, count] of Object.entries(EMPLOYEES)) n += upd.run(count, name).changes
-    db.prepare("INSERT INTO settings (key, value) VALUES ('employees_backfill_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    db.prepare("INSERT INTO settings (key, value) VALUES ('employees_backfill_v2', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[backfill] employee counts set on ${n} entities`)
   }
 
