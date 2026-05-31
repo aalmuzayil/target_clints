@@ -2,27 +2,24 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLang } from './i18n.jsx'
 
 // Commission estimator shown inside an entity sheet. Anchored to the official
-// pricing tiers: a monthly per-employee fee that steps down with headcount,
-// plus a one-time setup fee that depends on Cloud vs On-Premise. The display
-// shows 10% of the first-year deal value, with an animated counter.
+// pricing tiers from the methodology doc — kept implicit so the breakdown
+// stays hidden. Two big numbers face each other in a dark card; the slider
+// snaps to the tier breakpoints with named ticks underneath.
 const COMMISSION_RATE = 0.10
 
-// Pricing tiers — see "Methodology of Pricing" reference doc.
+// Pricing tiers from "Methodology of Pricing"
 const TIERS = [
-  { min: 100,  max: 199,   monthly: 40, cloud: 50_000,  onprem: 90_000  },
-  { min: 200,  max: 499,   monthly: 30, cloud: 70_000,  onprem: 100_000 },
-  { min: 500,  max: 999,   monthly: 23, cloud: 90_000,  onprem: 150_000 },
-  { min: 1000, max: 1999,  monthly: 18, cloud: 100_000, onprem: 200_000 },
-  { min: 2000, max: 2999,  monthly: 14, cloud: 160_000, onprem: 300_000 },
-  { min: 3000, max: 4999,  monthly: 11, cloud: 200_000, onprem: 350_000 },
-  { min: 5000, max: 7999,  monthly: 8,  cloud: 300_000, onprem: 500_000 },
-  { min: 8000, max: 14999, monthly: 6,  cloud: 400_000, onprem: 700_000 },
-  { min: 15000, max: Infinity, monthly: 4, cloud: 500_000, onprem: 850_000 },
+  { min: 100,   monthly: 40, cloud: 50_000,  onprem: 90_000  },
+  { min: 200,   monthly: 30, cloud: 70_000,  onprem: 100_000 },
+  { min: 500,   monthly: 23, cloud: 90_000,  onprem: 150_000 },
+  { min: 1000,  monthly: 18, cloud: 100_000, onprem: 200_000 },
+  { min: 2000,  monthly: 14, cloud: 160_000, onprem: 300_000 },
+  { min: 3000,  monthly: 11, cloud: 200_000, onprem: 350_000 },
+  { min: 5000,  monthly: 8,  cloud: 300_000, onprem: 500_000 },
+  { min: 8000,  monthly: 6,  cloud: 400_000, onprem: 700_000 },
+  { min: 15000, monthly: 4,  cloud: 500_000, onprem: 850_000 },
 ]
-
-function tierFor(emp) {
-  return TIERS.find((t) => emp >= t.min && emp <= t.max) || TIERS[0]
-}
+const STOP_LABELS = ['100', '200', '500', '1K', '2K', '3K', '5K', '8K', '15K+']
 
 // experience-based touch per sector: government deals lean on-premise with a
 // premium for regulatory/training overhead, semi-government leans cloud at
@@ -33,41 +30,38 @@ const SECTOR_PROFILE = {
   private: { deployment: 'cloud',  factor: 0.90 },
 }
 
-function estimateCommission(emp, sector) {
-  const tier = tierFor(emp)
+function estimateCommission(tierIndex, sector) {
+  const tier = TIERS[tierIndex]
   const profile = SECTOR_PROFILE[sector] || SECTOR_PROFILE.private
-  const annual = emp * tier.monthly * 12
+  const annual = tier.min * tier.monthly * 12
   const initial = profile.deployment === 'onprem' ? tier.onprem : tier.cloud
   const total = (annual + initial) * profile.factor
-  // round to nearest 5k for a clean display
   return Math.round((total * COMMISSION_RATE) / 5000) * 5000
 }
 
 // approximate the entity's expected size as a nicely rounded slider default.
-// Bigger headcount for ministries and PIF-flagship semi-government entities;
-// smaller for private defaults. Both fields stay editable.
 const BIG_NAMES = [
   'stc', 'سابك', 'معادن', 'أرامكو', 'نيوم', 'روشن', 'SEC', 'الكهرباء',
   'SNB', 'الأهلي', 'الرياض', 'الإنماء', 'أكوا باور', 'البحري', 'SAMI',
   'العقارية', 'السعودية للكهرباء', 'الراجحي', 'الإسكان الوطنية', 'NHC',
   'علم', 'هيومين', 'مرافق',
 ]
-const SLIDER_MAX = 15000
-function defaultEmployees(company) {
+function defaultTierIndex(company) {
+  const emp = defaultEmployeesRaw(company)
+  // pick the highest tier whose min is <= emp
+  let idx = 0
+  for (let i = 0; i < TIERS.length; i++) if (TIERS[i].min <= emp) idx = i
+  return idx
+}
+function defaultEmployeesRaw(company) {
   if (!company) return 1000
-  // prefer authoritative LinkedIn-sourced count when we have it
-  if (company.employees && company.employees > 0) {
-    return Math.max(100, Math.min(SLIDER_MAX, company.employees))
-  }
+  if (company.employees && company.employees > 0) return company.employees
   if (company.type === 'ministry') return 5000
   if (company.type === 'authority') return 2000
   const name = company.name || ''
-  if (company.type === 'semi') {
-    return BIG_NAMES.some((n) => name.includes(n)) ? 5000 : 1500
-  }
+  if (company.type === 'semi') return BIG_NAMES.some((n) => name.includes(n)) ? 5000 : 1500
   return BIG_NAMES.some((n) => name.includes(n)) ? 3000 : 500
 }
-
 function sectorFor(company) {
   if (!company) return 'private'
   if (company.type === 'ministry' || company.type === 'authority') return 'gov'
@@ -78,26 +72,59 @@ function sectorFor(company) {
 export default function CommissionCalc({ company }) {
   const { t, lang } = useLang()
   const [sector, setSector] = useState(() => sectorFor(company))
-  const [emp, setEmp] = useState(() => defaultEmployees(company))
-  // reset to smart defaults whenever the open entity changes
+  const [tierIndex, setTierIndex] = useState(() => defaultTierIndex(company))
   useEffect(() => {
     setSector(sectorFor(company))
-    setEmp(defaultEmployees(company))
+    setTierIndex(defaultTierIndex(company))
   }, [company?.id])
 
-  const target = useMemo(() => estimateCommission(emp, sector), [emp, sector])
-  const display = useAnimatedNumber(target)
+  const commission = useMemo(() => estimateCommission(tierIndex, sector), [tierIndex, sector])
+  const displayCom = useAnimatedNumber(commission)
 
   const fmt = (n) =>
     new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'ar-SA', { maximumFractionDigits: 0 }).format(n)
-  const empLabel = emp >= SLIDER_MAX ? `${fmt(SLIDER_MAX)}+` : fmt(emp)
+  const empLabel = STOP_LABELS[tierIndex]
 
   return (
     <div className="sheet-section calc-block">
-      <h4>{t('calcTitle')}</h4>
-      <p className="calc-sub">{t('calcSub')}</p>
+      <div className="calc-header-row">
+        <h4>{t('calcTitle')}</h4>
+        <span className="calc-sub-inline">{t('calcSub')}</span>
+      </div>
 
-      <label className="calc-field">
+      <div className="calc-card">
+        <div className="calc-card-half">
+          <div className="calc-card-value">{fmt(displayCom)} <em>{t('calcCurrency')}</em></div>
+          <div className="calc-card-label">{t('calcResultLabel')}</div>
+        </div>
+        <div className="calc-card-divider" aria-hidden />
+        <div className="calc-card-half end">
+          <div className="calc-card-value">{empLabel}</div>
+          <div className="calc-card-label">{t('calcSize')}</div>
+        </div>
+      </div>
+
+      <input
+        type="range" min="0" max={TIERS.length - 1} step="1" value={tierIndex}
+        onChange={(e) => setTierIndex(Number(e.target.value))}
+        className="calc-slider"
+        aria-label={t('calcSize')}
+      />
+
+      <div className="calc-ticks">
+        {STOP_LABELS.map((lbl, i) => (
+          <button
+            key={lbl}
+            type="button"
+            className={i === tierIndex ? 'tick on' : 'tick'}
+            onClick={() => setTierIndex(i)}
+          >
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      <label className="calc-field calc-sector-row">
         <span className="calc-label">{t('calcSector')}</span>
         <select className="calc-select" value={sector} onChange={(e) => setSector(e.target.value)}>
           <option value="gov">{t('calcGov')}</option>
@@ -106,31 +133,18 @@ export default function CommissionCalc({ company }) {
         </select>
       </label>
 
-      <label className="calc-field">
-        <span className="calc-label">
-          {t('calcSize')} <strong className="calc-emp">{empLabel}</strong>
-        </span>
-        <input
-          type="range" min="100" max={SLIDER_MAX} step="50" value={emp}
-          onChange={(e) => setEmp(Number(e.target.value))}
-          className="calc-slider"
-        />
-        <span className="calc-range-ends">
-          <span>100</span><span>{fmt(SLIDER_MAX)}+</span>
-        </span>
-      </label>
-
-      <div className="calc-result">
-        <span className="calc-result-label">{t('calcResultLabel')}</span>
-        <span className="calc-result-value">{fmt(display)} <em>{t('calcCurrency')}</em></span>
+      <div className="calc-info">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+          <path fill="currentColor" d="M9 21h6v-1H9v1zm3-20a7 7 0 00-4 12.74V17a1 1 0 001 1h6a1 1 0 001-1v-3.26A7 7 0 0012 1zm0 2a5 5 0 013.07 8.95l-.07.05V16h-6v-4l-.07-.05A5 5 0 0112 3z" />
+        </svg>
+        <span>{t('calcInfo')}</span>
       </div>
+
       <p className="calc-foot">{t('calcFoot')}</p>
     </div>
   )
 }
 
-// smooth count-up: drives the displayed number toward the latest target over
-// ~450 ms whenever the target changes (slider/solution).
 function useAnimatedNumber(target) {
   const [display, setDisplay] = useState(target)
   const rafRef = useRef(0)

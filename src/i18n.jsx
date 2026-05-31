@@ -51,6 +51,7 @@ const STRINGS = {
     calcResultLabel: 'العائد التقديري لفتح الباب',
     calcCurrency: 'ر.س',
     calcFoot: 'تقدير تقريبي غير ملزم.',
+    calcInfo: 'تقدير ذكي بحسب شريحة الحجم والقطاع — الفروق تعكس واقع السوق.',
     // ---- admin panel ----
     a_panelTitle: 'لوحة التحكم',
     a_visitSite: 'الموقع',
@@ -139,6 +140,7 @@ const STRINGS = {
     calcResultLabel: 'Estimated door-opener commission',
     calcCurrency: 'SAR',
     calcFoot: 'Indicative estimate, not binding.',
+    calcInfo: 'Smart estimate that adapts to the size tier and sector — the gaps reflect real market patterns.',
     // ---- admin panel ----
     a_panelTitle: 'Admin panel',
     a_visitSite: 'Site',
