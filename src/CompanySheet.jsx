@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { reserveCompany, submitLead, submitComment, getPhoneToken } from './api.js'
+import { useEffect, useState } from 'react'
+import { reserveCompany, cancelReservation, similarCompanies, submitLead, submitComment, getPhoneToken, getPhoneNumber } from './api.js'
 import { StatusBadge, Deadline, monogram } from './shared.jsx'
 import { useLang } from './i18n.jsx'
 
@@ -7,15 +7,18 @@ const FALLBACK_INTRO =
   'مرحباً، أتواصل معكم عبر منصة أكثم — منصة تحليلات القوى العاملة ودعم القرار بالذكاء الاصطناعي.'
 const DEFAULT_PROFILE = '/aktham-profile.pdf'
 
-export default function CompanySheet({ company, onClose, onNeedLogin, onReserved }) {
+export default function CompanySheet({ company, onClose, onNeedLogin, onReserved, onOpenCompany }) {
   const { lang } = useLang()
   const cname = lang === 'en' && company.name_en ? company.name_en : company.name
   const [reservation, setReservation] = useState(null)
   const [confirming, setConfirming] = useState(false)
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const canReserve = company.status === 'open'
+  const myPhone = getPhoneNumber()
+  const ownedByMe = company.status === 'reserved' && company.reserved_by && myPhone && company.reserved_by === myPhone
   const statusWord = company.status === 'completed' ? 'مكتملة' : 'محجوزة'
 
   function startReserve() {
@@ -32,6 +35,21 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
       setReservation(r)
       setConfirming(false)
       onReserved?.(r.company)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmCancel() {
+    setError('')
+    setBusy(true)
+    try {
+      await cancelReservation(company.id)
+      setConfirmingCancel(false)
+      onReserved?.({ ...company, status: 'open', reserved_by: '' })
+      onClose?.()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -70,7 +88,25 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
         ) : null}
 
         {reservation ? (
-          <ReservedOptions company={company} reservation={reservation} />
+          <ReservedOptions company={company} reservation={reservation} onOpenCompany={onOpenCompany} />
+        ) : ownedByMe ? (
+          confirmingCancel ? (
+            <div className="confirm-box">
+              <strong>إلغاء حجز «{company.name}»؟</strong>
+              <span>ستعود الجهة متاحة للحجز من جديد.</span>
+              {error && <div className="form-error">{error}</div>}
+              <div className="confirm-actions">
+                <button className="btn ghost" onClick={() => setConfirmingCancel(false)} disabled={busy}>تراجع</button>
+                <button className="btn danger" onClick={confirmCancel} disabled={busy}>{busy ? '...' : 'إلغاء الحجز'}</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="notice"><strong>أنت حاجز هذه الجهة</strong><span>تقدر تلغي الحجز إذا ما عاد تحتاجه.</span></div>
+              {error && <div className="form-error">{error}</div>}
+              <button className="btn danger full" onClick={() => { setError(''); setConfirmingCancel(true) }}>إلغاء الحجز</button>
+            </>
+          )
         ) : !canReserve ? (
           <div className="notice">
             <strong>هذه الجهة {statusWord} حالياً</strong>
@@ -161,7 +197,7 @@ function ChallengeRow({ text }) {
   return <div className="chal chal-text">{label}.</div>
 }
 
-function ReservedOptions({ company, reservation }) {
+function ReservedOptions({ company, reservation, onOpenCompany }) {
   const [picked, setPicked] = useState(null) // direct | onbehalf | other
 
   return (
@@ -186,6 +222,35 @@ function ReservedOptions({ company, reservation }) {
         <div><strong>أخرى</strong><span>اكتب ملاحظة (اختياري)</span></div>
       </button>
       {picked === 'other' && <CommentBox companyId={company.id} />}
+
+      <SimilarStrip companyId={company.id} onOpenCompany={onOpenCompany} />
+    </div>
+  )
+}
+
+// "جهات مشابهة" carousel — shown after a reservation so the user can continue.
+function SimilarStrip({ companyId, onOpenCompany }) {
+  const { t, lang } = useLang()
+  const [list, setList] = useState([])
+  useEffect(() => {
+    similarCompanies(companyId).then(setList).catch(() => setList([]))
+  }, [companyId])
+  if (!list.length) return null
+  const displayName = (c) => (lang === 'en' && c.name_en ? c.name_en : c.name)
+  return (
+    <div className="similar-block">
+      <h4 className="similar-title">{t('similarTitle')}</h4>
+      <div className="similar-strip">
+        {list.map((c) => (
+          <button key={c.id} className="similar-card" onClick={() => onOpenCompany?.(c)}>
+            <div className="similar-logo">
+              {c.logo ? <img src={c.logo} alt="" loading="lazy" /> : <span>{c.short || c.name.slice(0, 8)}</span>}
+            </div>
+            <span className="similar-name">{displayName(c)}</span>
+            {c.category ? <span className="similar-cat">{c.category}</span> : null}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

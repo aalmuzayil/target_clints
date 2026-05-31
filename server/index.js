@@ -313,7 +313,7 @@ app.get('/api/companies/:id', (req, res) => {
 // ============================================================
 //  USER ACTIONS (phone auth)
 // ============================================================
-const DEFAULT_HOLD_MS = 48 * 60 * 60 * 1000
+const DEFAULT_HOLD_MS = 14 * 24 * 60 * 60 * 1000
 
 app.post('/api/companies/:id/reserve', phoneAuth, (req, res) => {
   const c = db.prepare('SELECT * FROM agencies WHERE id = ? AND approved = 1').get(req.params.id)
@@ -342,6 +342,38 @@ app.post('/api/companies/:id/reserve', phoneAuth, (req, res) => {
     whatsappLink: c.contact_phone ? waLink(c.contact_phone, premade) : '',
     deadline,
   })
+})
+
+// the reserving user can release their own reservation
+app.post('/api/companies/:id/cancel-reservation', phoneAuth, (req, res) => {
+  const c = db.prepare('SELECT * FROM agencies WHERE id = ?').get(req.params.id)
+  if (!c) return res.status(404).json({ error: 'الجهة غير موجودة' })
+  if (c.status !== 'reserved') return res.status(409).json({ error: 'هذه الجهة ليست محجوزة' })
+  if (c.reserved_by !== req.phone) return res.status(403).json({ error: 'لا يمكنك إلغاء حجز ليس لك' })
+  db.prepare("UPDATE agencies SET status='open', reserved_by='', reserve_deadline=NULL WHERE id=?").run(c.id)
+  db.prepare("UPDATE reservations SET status='cancelled', decided_at=? WHERE company_id=? AND phone=? AND status='pending'").run(now(), c.id, req.phone)
+  db.prepare('DELETE FROM phone_company_links WHERE phone=? AND company_id=?').run(req.phone, c.id)
+  logEvent({ type: 'cancel_reservation', company_id: c.id, company_name: c.name, actor: req.phone, from_status: 'reserved', to_status: 'open' })
+  res.json({ ok: true })
+})
+
+// similar entities to suggest after a reservation (same sector/affiliation first, then same type)
+app.get('/api/companies/:id/similar', (req, res) => {
+  const c = db.prepare('SELECT * FROM agencies WHERE id = ? AND approved = 1').get(req.params.id)
+  if (!c) return res.status(404).json({ error: 'الجهة غير موجودة' })
+  const seen = new Set([c.id])
+  const rows = []
+  if (c.category) {
+    const r = db.prepare("SELECT * FROM agencies WHERE approved = 1 AND status = 'open' AND category = ? AND id != ? ORDER BY name LIMIT 6").all(c.category, c.id)
+    for (const x of r) { rows.push(x); seen.add(x.id) }
+  }
+  if (rows.length < 6) {
+    const r = db.prepare("SELECT * FROM agencies WHERE approved = 1 AND status = 'open' AND type = ? AND id != ? ORDER BY name LIMIT 20").all(c.type, c.id)
+    for (const x of r) {
+      if (!seen.has(x.id) && rows.length < 6) { rows.push(x); seen.add(x.id) }
+    }
+  }
+  res.json(rows.map(publicCompany))
 })
 
 // user gives us the concerned person's number -> Aktham will reach out
@@ -669,8 +701,9 @@ app.get('/api/admin/stats', adminAuth, (_req, res) => {
     entities: db.prepare('SELECT COUNT(*) AS c FROM agencies WHERE approved = 1').get().c,
     users: db.prepare("SELECT COUNT(*) AS c FROM phone_users WHERE status='approved'").get().c,
     pendingUsers: db.prepare("SELECT COUNT(*) AS c FROM phone_users WHERE status='pending'").get().c,
-    reservations: db.prepare('SELECT COUNT(*) AS c FROM reservations').get().c,
+    reservations: db.prepare("SELECT COUNT(*) AS c FROM reservations WHERE status='pending'").get().c,
     pendingCompanies: db.prepare('SELECT COUNT(*) AS c FROM agencies WHERE approved = 0').get().c,
+    reservedEntities: db.prepare("SELECT COUNT(*) AS c FROM agencies WHERE approved = 1 AND status='reserved'").get().c,
   }
   const recent = db
     .prepare(
@@ -682,7 +715,18 @@ app.get('/api/admin/stats', adminAuth, (_req, res) => {
        ORDER BY r.id DESC LIMIT 50`,
     )
     .all()
-  res.json({ byStatus, byType, bySector, totals, recent })
+  // currently reserved entities (with the user who holds them + the deadline)
+  const reservedList = db
+    .prepare(
+      `SELECT a.id, a.name, a.logo, a.reserved_by, a.reserve_deadline,
+              pu.name AS user_name, pu.nickname AS user_nick
+       FROM agencies a
+       LEFT JOIN phone_users pu ON pu.phone = a.reserved_by
+       WHERE a.approved = 1 AND a.status = 'reserved'
+       ORDER BY a.reserve_deadline ASC NULLS LAST, a.name ASC`,
+    )
+    .all()
+  res.json({ byStatus, byType, bySector, totals, recent, reservedList })
 })
 
 // ============================================================

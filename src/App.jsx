@@ -21,8 +21,10 @@ import { useLang } from './i18n.jsx'
 // fallback "high attrition" threshold; real value comes from admin settings
 const DEFAULT_HIGH_ATTRITION = 20
 
-// list ordering: completed first, then reserved, then available
+// list ordering: default puts completed/reserved first (showcases activity);
+// the "available first" toggle inverts the order so open entities lead the list.
 const STATUS_RANK = { completed: 0, reserved: 1, claimed: 1, open: 2 }
+const STATUS_RANK_AVAIL = { open: 0, reserved: 1, claimed: 1, completed: 2 }
 
 // entities shown per page
 const PAGE_SIZE = 7
@@ -46,6 +48,7 @@ export default function App() {
   const [highThreshold, setHighThreshold] = useState(DEFAULT_HIGH_ATTRITION) // admin-set
   const [page, setPage] = useState(0) // current page (0-indexed)
   const [layout, setLayout] = useState('list') // list | grid
+  const [availFirst, setAvailFirst] = useState(false) // sort: when true, available entities come first (reserved/completed at the end)
   const [phone, setPhone] = useState(getPhoneNumber())
   const [name, setName] = useState(getPhoneName())
   const [showLogin, setShowLogin] = useState(false)
@@ -105,8 +108,11 @@ export default function App() {
           (!highOnly || (c.profile || '').includes('أبرز التحديات')) &&
           (!q || c.name.includes(q) || (c.short || '').includes(q)),
       )
-      .sort((a, b) => (STATUS_RANK[a.status] ?? 3) - (STATUS_RANK[b.status] ?? 3))
-  }, [source, query, tierF, sub, statusF, highOnly])
+      .sort((a, b) => {
+        const rank = availFirst ? STATUS_RANK_AVAIL : STATUS_RANK
+        return (rank[a.status] ?? 3) - (rank[b.status] ?? 3)
+      })
+  }, [source, query, tierF, sub, statusF, highOnly, availFirst])
 
   // pagination: reset to first page whenever the filters change
   useEffect(() => { setPage(0) }, [query, tierF, sub, statusF, highOnly, view])
@@ -214,6 +220,13 @@ export default function App() {
         <div className="list-head">
           <span className="count">{loading ? t('loading') : t('entities', filtered.length)}</span>
           <div className="lh-actions">
+            <button
+              className={'sort-toggle' + (availFirst ? ' on' : '')}
+              onClick={() => setAvailFirst((v) => !v)}
+              title={availFirst ? t('sortAvailableFirst') : t('sortCompletedFirst')}
+            >
+              <SortIcon /> {availFirst ? t('sortAvailableFirst') : t('sortCompletedFirst')}
+            </button>
             <div className="view-mode" role="group" aria-label="view mode">
               <button className={layout === 'list' ? 'active' : ''} onClick={() => setLayout('list')} aria-label="list view"><ListIcon /></button>
               <button className={layout === 'grid' ? 'active' : ''} onClick={() => setLayout('grid')} aria-label="grid view"><GridIcon /></button>
@@ -341,6 +354,7 @@ export default function App() {
             loadAll()
             loadMine()
           }}
+          onOpenCompany={(c) => setSelected(c)}
         />
       )}
       {showAdd && (
@@ -386,6 +400,13 @@ function NeedIcon() {
   return (
     <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden className="need-icon">
       <path fill="currentColor" d="M13 2L4.5 13.5h6L11 22l8.5-11.5h-6L13 2z" />
+    </svg>
+  )
+}
+function SortIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden>
+      <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M7 4v14m0 0l-3-3m3 3l3-3M17 20V6m0 0l-3 3m3-3l3 3" />
     </svg>
   )
 }

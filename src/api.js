@@ -45,6 +45,9 @@ export const verifyOtp = (phone, code, name = '') =>
 // ---- user actions ----
 export const reserveCompany = (id, message = '') =>
   req(`/api/companies/${id}/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...phoneH() }, body: JSON.stringify({ message }) })
+export const cancelReservation = (id) =>
+  req(`/api/companies/${id}/cancel-reservation`, { method: 'POST', headers: phoneH() })
+export const similarCompanies = (id) => req(`/api/companies/${id}/similar`)
 export const submitCompany = (name, category = '', force = false) =>
   req('/api/companies/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', ...phoneH() }, body: JSON.stringify({ name, category, force }) })
 export const submitLead = (id, phone) =>
