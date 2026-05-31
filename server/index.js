@@ -684,6 +684,22 @@ app.delete('/api/admin/access/:phone', adminAuth, (req, res) => {
   res.json({ ok: true })
 })
 
+// FULL wipe: releases any holds, deletes the user row + all reservations,
+// links, otps, and event log entries that mention the phone. Irreversible.
+app.post('/api/admin/users/:phone/wipe', adminAuth, (req, res) => {
+  const phone = onlyDigits(req.params.phone)
+  if (!phone) return res.status(400).json({ error: 'رقم غير صحيح' })
+  const released = db.prepare("UPDATE agencies SET status='open', reserved_by='', reserve_deadline=NULL WHERE reserved_by=?").run(phone).changes
+  const reservations = db.prepare('DELETE FROM reservations WHERE phone=? OR lead_phone=?').run(phone, phone).changes
+  const links = db.prepare('DELETE FROM phone_company_links WHERE phone=?').run(phone).changes
+  const user = db.prepare('DELETE FROM phone_users WHERE phone=?').run(phone).changes
+  const otps = db.prepare('DELETE FROM otps WHERE phone=?').run(phone).changes
+  let events = db.prepare('DELETE FROM events WHERE actor=?').run(phone).changes
+  events += db.prepare('DELETE FROM events WHERE meta LIKE ?').run(`%${phone}%`).changes
+  logEvent({ type: 'user_wiped', actor: req.admin?.email || 'admin', meta: { phone, released, reservations, links, user, otps, events } })
+  res.json({ ok: true, released, reservations, links, user, otps, events })
+})
+
 // ============================================================
 //  ADMIN: monitoring dashboard stats
 // ============================================================

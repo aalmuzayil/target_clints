@@ -96,6 +96,8 @@ export const adminRejectAccess = (phone) =>
   req(`/api/admin/access/${phone}/reject`, { method: 'POST', headers: adminH() })
 export const adminRemoveAccess = (phone) =>
   req(`/api/admin/access/${phone}`, { method: 'DELETE', headers: adminH() })
+export const adminWipeUser = (phone) =>
+  req(`/api/admin/users/${encodeURIComponent(phone)}/wipe`, { method: 'POST', headers: adminH() })
 export const adminUserCompanies = (phone) =>
   req(`/api/admin/users/${phone}/companies`, { headers: adminH() })
 export const adminAssignUser = (phone, company_id) =>

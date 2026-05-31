@@ -27,6 +27,7 @@ import {
   adminApproveAccess,
   adminRejectAccess,
   adminRemoveAccess,
+  adminWipeUser,
   adminGetSettings,
   adminSaveIntro,
   adminSaveSettings,
@@ -667,6 +668,14 @@ function Access({ onError }) {
     if (!confirm(`إلغاء وصول الرقم ${p}؟`)) return
     try { await adminRemoveAccess(p); load() } catch (e) { onError(e.message) }
   }
+  async function wipe(p) {
+    if (!confirm(`حذف الرقم ${p} مع كل تاريخه (الحجوزات، الجهات المربوطة، التاريخ، الأحداث)؟\nهذا الإجراء لا يمكن التراجع عنه.`)) return
+    try {
+      const r = await adminWipeUser(p)
+      load()
+      alert(`تم الحذف:\n- جهات تم تحريرها: ${r.released}\n- حجوزات: ${r.reservations}\n- روابط: ${r.links}\n- مستخدم: ${r.user}\n- OTPs: ${r.otps}\n- أحداث: ${r.events}`)
+    } catch (e) { onError(e.message) }
+  }
 
   return (
     <>
@@ -720,7 +729,8 @@ function Access({ onError }) {
               <div className="row-actions">
                 <button className="btn ghost" onClick={() => setAssignUser(u)}>ربط جهات</button>
                 <button className="btn ghost" onClick={() => rename(u)}>تعديل</button>
-                <button className="btn danger" onClick={() => remove(u.phone)}>إلغاء</button>
+                <button className="btn ghost" onClick={() => remove(u.phone)}>إلغاء وصول</button>
+                <button className="btn danger" onClick={() => wipe(u.phone)} title="حذف الرقم وكل تاريخه">حذف بالكامل</button>
               </div>
             </div>
           ))}
