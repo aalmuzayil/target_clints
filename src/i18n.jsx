@@ -50,7 +50,7 @@ const STRINGS = {
     calcPrivate: 'خاص',
     calcResultLabel: 'العائد التقديري لفتح الباب',
     calcCurrency: 'ر.س',
-    calcFoot: 'بناءً على ١٥٪ من قيمة الصفقة المتوقعة لشريحة الموظفين والقطاع. تقدير تقريبي غير ملزم.',
+    calcFoot: 'تقدير تقريبي غير ملزم.',
     // ---- admin panel ----
     a_panelTitle: 'لوحة التحكم',
     a_visitSite: 'الموقع',
@@ -138,7 +138,7 @@ const STRINGS = {
     calcPrivate: 'Private',
     calcResultLabel: 'Estimated door-opener commission',
     calcCurrency: 'SAR',
-    calcFoot: 'Based on 15% of the expected deal value for that employee tier and sector. Indicative estimate, not binding.',
+    calcFoot: 'Indicative estimate, not binding.',
     // ---- admin panel ----
     a_panelTitle: 'Admin panel',
     a_visitSite: 'Site',

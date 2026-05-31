@@ -5,7 +5,7 @@ import { useLang } from './i18n.jsx'
 // The deal value scales with expected entity size (employee count) and the
 // sector picks up a credibility multiplier. Commission is a fixed 15% of the
 // estimated deal value — visualised with an animated counter.
-const COMMISSION_RATE = 0.15
+const COMMISSION_RATE = 0.10
 
 // Piecewise base deal value (SAR), keyed off employee count.
 // Tuned so 100 → 200k, 500 → 600k, 1000 → 1m, 2000 → 1.8m, 5000 → 4m, 5000+ → 5m.
