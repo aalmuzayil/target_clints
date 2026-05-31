@@ -369,4 +369,24 @@ export function seed() {
     db.prepare("INSERT INTO settings (key, value) VALUES ('reset_deadlines_14d_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[backfill] extended ${r.changes} reservation deadlines to 14 days`)
   }
+
+  // one-time wipe for a specific phone (admin-requested cleanup): release any
+  // entities they hold, drop their assignments, history, user record, and
+  // any events that reference them.
+  const wipeDone = db.prepare("SELECT value FROM settings WHERE key = 'wipe_phone_0538006992_v1'").get()?.value
+  if (wipeDone !== '1') {
+    const variants = ['0538006992', '538006992', '966538006992', '+966538006992']
+    const phs = variants.map(() => '?').join(',')
+    const released = db.prepare(`UPDATE agencies SET status='open', reserved_by='', reserve_deadline=NULL WHERE reserved_by IN (${phs})`).run(...variants).changes
+    const resDel = db.prepare(`DELETE FROM reservations WHERE phone IN (${phs}) OR lead_phone IN (${phs})`).run(...variants, ...variants).changes
+    const linksDel = db.prepare(`DELETE FROM phone_company_links WHERE phone IN (${phs})`).run(...variants).changes
+    const userDel = db.prepare(`DELETE FROM phone_users WHERE phone IN (${phs})`).run(...variants).changes
+    const otpDel = db.prepare(`DELETE FROM otps WHERE phone IN (${phs})`).run(...variants).changes
+    let evtDel = db.prepare(`DELETE FROM events WHERE actor IN (${phs})`).run(...variants).changes
+    for (const v of variants) {
+      evtDel += db.prepare("DELETE FROM events WHERE meta LIKE ?").run(`%${v}%`).changes
+    }
+    db.prepare("INSERT INTO settings (key, value) VALUES ('wipe_phone_0538006992_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[wipe] phone cleanup: released=${released} reservations=${resDel} links=${linksDel} users=${userDel} otps=${otpDel} events=${evtDel}`)
+  }
 }

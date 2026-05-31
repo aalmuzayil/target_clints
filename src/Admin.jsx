@@ -234,6 +234,42 @@ function Overview({ onError }) {
         )}
       </div>
 
+      {/* reserved entities grouped by holder */}
+      {(s.reservedList || []).length > 0 && (() => {
+        const byHolder = {}
+        for (const r of s.reservedList) {
+          const key = r.reserved_by || ''
+          if (!byHolder[key]) byHolder[key] = { phone: key, name: r.user_nick || r.user_name || '', entities: [] }
+          byHolder[key].entities.push(r.name)
+        }
+        const holders = Object.values(byHolder).sort((a, b) => b.entities.length - a.entities.length)
+        return (
+          <div className="panel">
+            <h3>{t('a_secByHolder')} ({holders.length})</h3>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t('a_thHolder')}</th>
+                    <th>{t('a_thCount')}</th>
+                    <th>{t('a_thEntities')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {holders.map((h) => (
+                    <tr key={h.phone || '_'}>
+                      <td>{h.name || '—'}<br /><span className="muted" dir="ltr">{h.phone || '—'}</span></td>
+                      <td><strong>{h.entities.length}</strong></td>
+                      <td>{h.entities.join('، ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* recent reservations table */}
       <div className="panel">
         <h3>{t('a_secRecentReservations')} ({s.recent.length})</h3>
