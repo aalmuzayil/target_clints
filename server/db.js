@@ -10,6 +10,7 @@ import { ATTRITION } from './attrition.js'
 import { PROSPECTS } from './prospects.js'
 import { TADAWUL } from './tadawul.js'
 import { SEMIGOV } from './semigov.js'
+import { PIF_ADDITIONS } from './pif-additions.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db')
@@ -368,6 +369,26 @@ export function seed() {
     const r = db.prepare("UPDATE agencies SET reserve_deadline = ? WHERE status = 'reserved'").run(newDeadline)
     db.prepare("INSERT INTO settings (key, value) VALUES ('reset_deadlines_14d_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
     console.log(`[backfill] extended ${r.changes} reservation deadlines to 14 days`)
+  }
+
+  // one-time PIF additions: insert the curated PIF subsidiaries that aren't
+  // in the directory yet. Skips any name that already exists.
+  const pifAddDone = db.prepare("SELECT value FROM settings WHERE key = 'pif_additions_v1'").get()?.value
+  if (pifAddDone !== '1') {
+    const exists = db.prepare('SELECT 1 FROM agencies WHERE name = ?')
+    const ins = db.prepare(
+      `INSERT INTO agencies (name, name_en, short, logo, url, sort_order, category, type, profile, status, approved)
+       VALUES (?, ?, '', '', '#', ?, 'صندوق الاستثمارات العامة', 'semi', ?, 'open', 1)`,
+    )
+    let ord = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM agencies').get().m
+    let n = 0
+    for (const p of PIF_ADDITIONS) {
+      if (exists.get(p.name)) continue
+      ins.run(p.name, p.name_en || '', ++ord, p.brief || '')
+      n++
+    }
+    db.prepare("INSERT INTO settings (key, value) VALUES ('pif_additions_v1', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+    console.log(`[seed] PIF additions inserted: ${n}`)
   }
 
   // one-time wipe for a specific phone (admin-requested cleanup): release any
