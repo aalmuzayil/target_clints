@@ -79,7 +79,7 @@ export default function CompanySheet({ company, onClose, onNeedLogin, onReserved
 
         {company.profile ? <Challenges profile={company.profile} /> : null}
 
-        <CommissionCalc company={company} />
+        {company.status === 'open' ? <CommissionCalc company={company} /> : null}
 
         {company.url && company.url !== '#' ? (
           <a className="site-link" href={company.url} target="_blank" rel="noreferrer">

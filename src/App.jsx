@@ -16,6 +16,7 @@ import CompanySheet from './CompanySheet.jsx'
 import HeroIntro from './HeroIntro.jsx'
 import LogoMarquee from './LogoMarquee.jsx'
 import StoryScreens from './StoryScreens.jsx'
+import SupportWidget from './SupportWidget.jsx'
 import { useLang } from './i18n.jsx'
 
 // fallback "high attrition" threshold; real value comes from admin settings
@@ -340,6 +341,8 @@ export default function App() {
       </section>
 
       <Footer />
+
+      <SupportWidget />
 
       {showLogin && <PhoneLogin onClose={() => setShowLogin(false)} onSuccess={onLogin} />}
       {selected && (
